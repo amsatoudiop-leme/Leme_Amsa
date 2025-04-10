@@ -1,0 +1,1962 @@
+---
+title: "Mapeamento e análise de áreas de tratamento especial na região de concessão da Light"
+subtitle: "Distribuição de PNT nas subestações"
+# institute: "Leme"
+# author: "Amsatou e Afonso"
+# date: "`r Sys.Date()`"
+date: "10 de abril de 2025"
+encoding: "UTF-8"
+output:
+  xaringan::moon_reader:
+    # seal: false
+    chakra: libs/remark-latest.min.js
+
+    css: ["xaringan-themer.css"]
+    lib_dir: libs
+    nature:
+      navigation:
+        scroll: false
+      slideNumberFormat: "%current%"
+      highlightStyle: github
+      highlightLines: true
+      ratio: 16:9
+      countIncrementalSlides: true
+html_document: default
+# knit: pagedown::chrome_print
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = FALSE, message = FALSE, warning = FALSE)
+
+# knitr::opts_knit$set(root.dir = "C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados")
+
+# setwd("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados")
+
+Sys.setlocale(category = "LC_ALL", locale = "pt_BR.UTF-8")
+
+
+library(pacman)
+pacman::p_load(tidyverse, readr, readxl, janitor, highcharter, reactable, sf, arrow, leaflet, htmltools, flextable, forecast, tseries, xaringan, xaringanthemer, xaringanExtra)
+
+
+```
+
+```{r tratamento, include=FALSE}
+
+
+
+# load dados
+
+# subestacoes <- read_xlsx("C:/Users/amsa2/Light/Projeto O LEME - Estudo sobre ASRO - Geral/01. Informações disponibilizadas/01 DADOS/Balanço Subestação/Balanço Histórico SETD_ out18 até dez24.xlsx",
+#                          sheet = 1) %>%
+#   janitor::clean_names()
+# # 
+# 
+# saveRDS(subestacoes, file = "C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/dados/analise_SE_PNT.rds")
+subestacoes <- readRDS("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados/analise_SE_PNT.rds")
+
+
+
+
+# tratamento
+
+subestacoes_tratado <- subestacoes %>%
+  filter(periodo >= "2019-01-01") %>%
+  select(periodo, subestacoes, energia_fornecida_total, perda_nao_tecnica, pnt_percent) %>%
+  mutate(periodo = as.Date(periodo),
+         mes = month(periodo, label = T),
+         ano = year(periodo),
+         subestacao_index = as.integer(factor(subestacoes, levels = sort(unique(subestacoes)))))
+
+subestacao_escolhida <- subestacoes_tratado %>%
+  filter(subestacoes == "SETD AGUA GRANDE")
+
+
+
+
+
+pnt_aneel_base <- read_xlsx("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados/pnt_aneel.xlsx",
+                         sheet = 1) %>%
+  janitor::clean_names()
+
+
+
+pnt_subestacoes_contribuicao_base <- read_xlsx("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados/Subestacao_PNT_2024.xlsx",
+                         sheet = 1) %>%
+  janitor::clean_names() 
+
+
+setd_alertas <- readxl::read_xlsx("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados/DadosGerais_Subestacao.xlsx") %>%
+  janitor::clean_names()
+
+
+pnt_subestacoes_contribuicao_base <- pnt_subestacoes_contribuicao_base %>%
+  left_join(setd_alertas, by = "subestacoes")
+
+
+library(geobr)
+library(sf)
+
+# baixando informações no nível do estado, para obter geometrias
+# estados <- read_state() %>% 
+#   mutate(code_state = as.character(code_state))
+# saveRDS(estados, file = "C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados/estados.rds")
+
+estados <- readRDS("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados/estados.rds")
+
+
+
+# shp_area_subestacoes <- arrow::read_parquet("C:/Users/amsa2/Light/Projeto O LEME - Estudo sobre ASRO - Geral/01. Informações disponibilizadas/01 DADOS/Areas de Atendimento SE/gdf_subestacoes_final_2025_03_24.parquet")
+# 
+# saveRDS(shp_area_subestacoes, file = "C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados/gdf_subestacoes_final_2025_03_24.parquet")
+
+shp_area_subestacoes <- readRDS("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados/gdf_subestacoes_final_2025_03_24.parquet")
+
+
+
+shp_area_subestacoes <- shp_area_subestacoes %>%
+  select(subestacoes = NOME, geometry) %>%
+  mutate(geometry = st_as_sfc(geometry, EWKB = TRUE)) %>%   # Converter a geometria de arrow_binary para sfc (simples features)
+  st_sf(crs = 4326)  # Define o CRS diretamente 
+
+
+```
+
+
+```{r xaringan-setup, echo=FALSE}
+# names(xaringan:::list_css())
+#  [1] "chocolate-fonts"  "chocolate"        "default-fonts"    "default"          "duke-blue"       
+#  [6] "fc-fonts"         "fc"               "glasgow_template" "hygge-duke"       "hygge"           
+# [11] "ki-fonts"         "ki"               "kunoichi"         "lucy-fonts"       "lucy"            
+# [16] "metropolis-fonts" "metropolis"       "middlebury-fonts" "middlebury"       "nhsr-fonts"      
+# [21] "nhsr"             "ninjutsu"         "rladies-fonts"    "rladies"          "robot-fonts"     
+# [26] "robot"            "rutgers-fonts"    "rutgers"          "shinobi"          "tamu-fonts"      
+# [31] "tamu"             "uio-fonts"        "uio"              "uo-fonts"         "uo"              
+# [36] "uol-fonts"        "uol"              "useR-fonts"       "useR"             "uwm-fonts"       
+# [41] "uwm"              "wic-fonts"        "wic"    
+
+xaringanExtra::use_xaringan_extra(c("tile_view", "animate_css", "panelset", "fit_screen"))
+
+
+xaringanExtra::use_logo(image_url ="dados/logo_leme.png", width = 150)
+
+
+style_panelset_tabs(hover_border_color = "#005270", active_border_color = "#005270")
+
+# xaringanthemer::style_duo_accent(
+#   primary_color = "#005270",
+#   secondary_color = "#72C8ED",
+#   
+#   # Mantendo Montserrat para cabeçalhos (do Google Fonts)
+#   header_font_google = google_font("Montserrat"),
+#   
+#   # Definindo Century Gothic como a fonte principal do corpo do texto
+#   text_font_base = "Century Gothic",
+#   text_font_family = "Century Gothic, sans-serif",  # Fallback para compatibilidade
+#   
+#   # Ajustes de tamanho
+#   text_font_size = 4, 
+#   header_h1_font_size = 6
+# )
+
+xaringanthemer::style_duo_accent(
+  primary_color = "#005270",
+  secondary_color = "#72C8ED",
+  header_font_google = google_font("Montserrat"), # Define para h1, h2, h3
+  text_font_google = google_font("Montserrat", "300", "300i"),
+  text_font_base = "Century Gothic",
+  text_font_family = "Century Gothic",
+  header_font_family = "Montserrat", # Garante que os headers usem Montserrat
+  text_font_size = 5, 
+  header_h1_font_size = 8
+)
+
+```
+
+```{css, echo = FALSE}
+@import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700&display=swap');
+
+.remark-slide>.center {
+    text-align: right;
+    padding: 80px 64px 0px 64px;
+}
+
+<!-- .remark-slide-content h2 { -->
+<!--     padding-right: 200px; -->
+<!-- } -->
+
+.remark-slide-content {
+    padding: 35px 64px 16px 64px;
+}
+
+:root {
+    --base-font-size: 10x;
+    --title-slide-background-color: #005270;
+    --title-slide-text-color: white;
+    --header-font-family: 'Century Gothic';
+    --header-h1-font-size: 2.3rem;
+    --header-h2-font-size: 2rem;
+    --header-h3-font-size: 1.7rem;
+}
+
+
+p {
+    font-size: 1.2rem;
+}
+
+
+
+
+
+
+h1, h2, h3 {
+    font-family: 'Montserrat', sans-serif !important;
+    font-weight: 700;
+    <!-- color: white; -->
+}
+
+.title-slide {
+    background-image: url("dados/Slide2.jpg");
+    background-size: cover;
+    background-position: center;
+    text-align: center;
+    color: white;
+}
+
+<!-- .title-slide h1 { -->
+<!--     font-size: 2.5rem; -->
+<!-- } -->
+
+<!-- .title-slide p { -->
+<!--     font-size: 1.5rem; -->
+<!-- } -->
+
+
+
+
+
+
+/* Ajustando o subtítulo */
+.title-slide h1 {
+    margin-right: 40px;
+    margin-left: 40px;
+    
+}
+
+/* Ajustando o título */
+.title-slide h2 {
+    font-family: 'Montserrat', sans-serif;
+    <!-- font-size: 2.5rem; -->
+    <!-- font-weight: unset; -->
+    <!-- margin-top: 40%; -->
+    margin-right: 40px;
+    margin-left: 40px;
+}
+
+/* Ajustando o subtítulo */
+.title-slide h3 {
+    font-weight: unset;
+    margin-right: 40px;
+    margin-left: 40px;
+    
+}
+
+
+```
+
+```{r eval=FALSE, include=FALSE, echo=FALSE}
+xaringan::summon_remark() # para conseguir apresentar offline
+
+# pagedown::chrome_print("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/apresentacao_analise_SE_PNT.html")
+
+# xaringan::inf_mr("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/apresentacao_analise_SE_PNT.html")
+
+
+
+```
+
+```{r preview, eval=FALSE, include=FALSE}
+xaringan::inf_mr() # preview lateral da edicao
+```
+
+
+
+## Onde estamos
+
+#### Ciclo 1.2
+
+<br>
+
+### O objetivo desta segunda entrega é testar a viabilidade de implementar novos processos de coleta e análise de dados sobre as Áreas com Severas Restrições Operacionais (ASRO)
+
+<br>
+
+### Nesta apresentação, abordaremos como a PNT se comporta no nível das subestações e indicar um referencial de elevado % de PNT
+
+---
+
+## Nova proposta de mapeamento padronizada inicia por definir critérios de PNT elevado
+
+```{r, echo=FALSE, dpi=300}
+
+
+knitr::include_graphics("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/dados/Slide10.jpg")
+
+```
+
+
+---
+
+### Perda não técnica no Brasil
+
+.panelset[
+
+.panel[.panel-name[Mapa]
+#### Em 2023, o Rio de Janeiro foi o 3º estado com maior percertual de Perdas Não Técnicas
+###### Fonte: ANEEL - Perda não técnica sobre Energia Injetada (2023)
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=5, out.width='100%'}
+
+
+pnt_aneel_uf <- pnt_aneel_base %>%
+  filter(!is.na(ano)) %>%
+  # filter(ano == 2023) %>%
+  
+  group_by(ano, uf) %>%
+  summarise(energia_injetada_m_wh = sum(energia_injetada_m_wh,na.rm = TRUE),
+            perda_nao_tecnica_real_m_wh = sum(perda_nao_tecnica_real_m_wh,na.rm = TRUE)) %>%
+  ungroup() %>%
+
+  mutate(pnt_real_sobre_energia_injetada = perda_nao_tecnica_real_m_wh/energia_injetada_m_wh,
+         pnt_real_sobre_energia_injetada_formatado = formattable::percent(pnt_real_sobre_energia_injetada, digits = 2, decimal.mark = ","))
+
+  
+pnt_aneel_uf_2023 <- pnt_aneel_uf %>%
+  filter(ano == 2023)
+  
+
+
+
+
+# combinação da base de população com as geometrias
+pnt_estados <- left_join(estados, pnt_aneel_uf_2023,
+                              by = c("abbrev_state" = "uf"))
+
+
+# plot do mapa populacional 
+# ggplot(pnt_estados, aes(fill = pnt_real_sobre_energia_injetada)) + 
+#   geom_sf()  
+
+
+# 
+# pal <- colorNumeric(palette = "YlOrRd", domain = pnt_estados$pnt_real_sobre_energia_injetada*100, na.color = "transparent")
+# 
+# leaflet(pnt_estados) %>%
+#   addProviderTiles(providers$CartoDB.Positron) %>%
+#   
+#   addPolygons(fillColor = ~pal(pnt_real_sobre_energia_injetada*100),
+#               weight = 1,
+#               opacity = 1,
+#               color = "lightgrey",
+#               dashArray = "3",
+#               fillOpacity = 0.9,
+#               label = lapply(paste0("<span style='font-size:15px'>", pnt_estados$name_state, "</span><br>",
+#                                     "<span style='font-size:14px'> Percentual: ", pnt_estados$pnt_real_sobre_energia_injetada_formatado, "</span>"),
+#                              htmltools::HTML),
+#               highlightOptions = highlightOptions(
+#                 weight = 1.5,
+#                 color = "black",
+#                 dashArray = "",
+#                 fillOpacity = 1,
+#                 bringToFront = TRUE)) %>%
+#   
+#   addLabelOnlyMarkers(
+#     lng = st_coordinates(st_centroid(pnt_estados$geom))[,1],  # Coordenada X (longitude)
+#     lat = st_coordinates(st_centroid(pnt_estados$geom))[,2],  # Coordenada Y (latitude)
+#     label = ~pnt_real_sobre_energia_injetada_formatado,  # Valor formatado
+#     labelOptions = labelOptions(
+#       noHide = TRUE,
+#       direction = "center",
+#       textOnly = TRUE,
+#       style = list(
+#         "color" = "black",
+#         # "font-weight" = "bold",
+#         "font-size" = "12px"
+#       )
+#     )
+#   ) %>%
+#   addLegend(
+#     position = "bottomright",
+#     pal = pal,
+#     values = pnt_estados$pnt_real_sobre_energia_injetada*100,
+#     # values = c(0:35),
+#     title = "PNT (%)",
+#     opacity = 0.8,
+#     labFormat = labelFormat(suffix = "%")
+#   )
+
+
+# pal <- colorNumeric(
+#   palette = c("#FFCB8F", "#EA7542"),
+#   domain = pnt_estados$pnt_real_sobre_energia_injetada * 100,
+#   na.color = "transparent"
+# )
+
+pal <- colorNumeric(
+  palette = c("#ffe5c7", "#A20021"),
+  domain = pnt_estados$pnt_real_sobre_energia_injetada * 100,
+  na.color = "transparent"
+)
+
+leaflet(pnt_estados) %>%
+  setView(lng = -47.882778, lat = -15.793889, zoom = 3) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+  
+  addPolygons(
+    fillColor = ~pal(pnt_real_sobre_energia_injetada * 100),
+    weight = 1,
+    opacity = 1,
+    color = "lightgrey",
+    dashArray = "3",
+    fillOpacity = 0.9,
+    label = lapply(
+      paste0(
+        "<span style='font-size:15px'>", pnt_estados$name_state, "</span><br>",
+        "<span style='font-size:14px'> Percentual: ", pnt_estados$pnt_real_sobre_energia_injetada_formatado, "</span>"
+      ),
+      htmltools::HTML
+    ),
+    highlightOptions = highlightOptions(
+      weight = 1.5,
+      color = "black",
+      dashArray = "",
+      fillOpacity = 1,
+      bringToFront = TRUE
+    )
+  ) %>%
+  
+  addLabelOnlyMarkers(
+    lng = st_coordinates(st_centroid(pnt_estados$geom))[,1],
+    lat = st_coordinates(st_centroid(pnt_estados$geom))[,2],
+    label = ~pnt_real_sobre_energia_injetada_formatado,
+    labelOptions = labelOptions(
+      noHide = TRUE,
+      direction = "center",
+      textOnly = TRUE,
+      style = list(
+        "color" = "black",
+        "font-size" = "12px"
+      )
+    )
+  ) %>%
+  
+  addLegend(
+    position = "bottomright",
+    pal = pal,
+    values = pnt_estados$pnt_real_sobre_energia_injetada * 100,
+    title = "PNT (%)",
+    opacity = 0.8,
+    labFormat = labelFormat(suffix = "%")
+  )
+
+
+```
+]
+
+.panel[.panel-name[Comparativo RJ x BR]
+#### Naquele mesmo ano, a média brasileira de PNT foi de 5%, enquanto que o RJ apresentou média de 20%
+###### Fonte: ANEEL - Perda não técnica sobre Energia Injetada (2008-2023)
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, out.width='100%'}
+
+
+pnt_aneel_br_rj <- pnt_aneel_base %>%
+  filter(!is.na(ano)) %>%
+
+  mutate(br_rj = ifelse(uf == "RJ", "RJ", "BR sem RJ")) %>%
+  
+  group_by(ano, br_rj) %>%
+  summarise(energia_injetada_m_wh = sum(energia_injetada_m_wh,na.rm = TRUE),
+            perda_nao_tecnica_real_m_wh = sum(perda_nao_tecnica_real_m_wh,na.rm = TRUE)) %>%
+  ungroup() %>%
+
+  mutate(pnt_real_sobre_energia_injetada = perda_nao_tecnica_real_m_wh*100/energia_injetada_m_wh,
+         pnt_real_sobre_energia_injetada_formatado = formattable::percent(pnt_real_sobre_energia_injetada, digits = 2, decimal.mark = ","))
+
+
+  
+# 
+# # Criando o gráfico
+# hchart(pnt_aneel_br_rj, type = "line", hcaes(x = ano, y = pnt_real_sobre_energia_injetada, group = br_rj)) %>%
+#   
+#   # Personalização dos eixos
+#   hc_xAxis(
+#     title = list(text = "Ano", style = list(fontFamily = "Montserrat"))
+#   ) %>%
+#   hc_yAxis(
+#     title = list(text = "PNT (%)", style = list(fontFamily = "Montserrat")),
+#     labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.')+ ' %'; }"))
+#   ) %>%
+# 
+#   # Personalizações visuais
+#   # hc_title(text = "Comparativo anual PNT (%) no RJ e no restante do BR", style = list(fontFamily = "Montserrat")) %>%
+#   hc_chart(backgroundColor = "transparent") %>%
+#   hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+#   
+#   # Tooltip formatado com separadores
+#   hc_tooltip(formatter = JS("function() { return '<b>' + this.series.name + '</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"))
+# 
+
+
+hchart(pnt_aneel_br_rj, type = "line", hcaes(x = ano, y = pnt_real_sobre_energia_injetada, group = br_rj)) %>%
+  
+  # Paleta de cores personalizada
+  hc_colors(colors = c("#005270", "#EA7542")) %>%  # Ordem importa: 1º grupo → azul, 2º → laranja
+
+  # Eixos
+  hc_xAxis(
+    title = list(text = "Ano", style = list(fontFamily = "Montserrat")),
+    tickInterval = 1,
+    allowDecimals = FALSE
+  ) %>%
+  hc_yAxis(
+    title = list(text = "PNT (%)", style = list(fontFamily = "Montserrat")),
+    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.')+ ' %'; }"))
+  ) %>%
+
+  # Estilo visual
+  hc_chart(backgroundColor = "transparent") %>%
+  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+    
+  hc_plotOptions(
+    series = list(
+      borderWidth = 0,
+      dataLabels = list(
+        enabled = TRUE,
+        formatter = JS("function() { return Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"),
+        style = list(fontFamily = "Montserrat"),
+        inside = FALSE
+      )
+    )
+  ) %>%
+  
+  # Tooltip com formatação
+  hc_tooltip(formatter = JS("function() { return '<b>' + this.series.name + '</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"))
+
+
+```
+]
+
+.panel[.panel-name[Comparativo das concessionárias]
+#### No mercado total, a Light figura em 3º com maior percentual de PNT</b>
+###### Fonte: ANEEL - Perda não técnica sobre Energia Injetada (2008-2023)
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, out.width='100%'}
+
+
+pnt_aneel_distribuidoras_2023 <- pnt_aneel_base %>%
+  filter(ano == 2023) %>%
+
+  group_by(ano, distribuidora) %>%
+  summarise(energia_injetada_m_wh = sum(energia_injetada_m_wh,na.rm = TRUE),
+            perda_nao_tecnica_real_m_wh = sum(perda_nao_tecnica_real_m_wh,na.rm = TRUE)) %>%
+  ungroup() %>%
+
+  mutate(pnt_real_sobre_energia_injetada = perda_nao_tecnica_real_m_wh*100/energia_injetada_m_wh,
+         pnt_real_sobre_energia_injetada_formatado = formattable::percent(pnt_real_sobre_energia_injetada, digits = 2, decimal.mark = ",")) %>%
+  arrange(desc(pnt_real_sobre_energia_injetada))
+
+
+
+
+
+# Dados com cores personalizadas
+dados_plot <- pnt_aneel_distribuidoras_2023 %>%
+  mutate(
+    color = ifelse(distribuidora == "Light", "#FFA500", "#005270")  # Laranja para Light
+  )
+
+hchart(
+  dados_plot,
+  type = "column",
+  hcaes(x = distribuidora, y = pnt_real_sobre_energia_injetada, color = color)
+) %>%
+  # Eixos
+  hc_xAxis(
+    title = list(text = "Ano", style = list(fontFamily = "Montserrat")),
+    labels = list(
+      step = 1,
+      rotation = 270,
+      style = list(
+        fontFamily = "Montserrat",
+        fontSize = "10px"  # Reduz o tamanho da fonte aqui
+      )
+    )
+  ) %>%
+  hc_yAxis(
+    title = list(text = "PNT (%)", style = list(fontFamily = "Montserrat")),
+    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.') + ' %'; }"))
+  ) %>%
+  
+  # Estilo visual
+  hc_chart(backgroundColor = "transparent") %>%
+  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+  
+  hc_plotOptions(
+    series = list(
+      borderWidth = 0,
+      dataLabels = list(
+        enabled = TRUE,
+        formatter = JS("function() { return Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"),
+        rotation = 270,
+        y = -25,
+        style = list(fontFamily = "Montserrat", fontSize = "10px"),
+        inside = FALSE,
+        crop = FALSE,
+        overflow = "none"
+      )
+    )
+  ) %>%
+  
+  # Tooltip com formatação
+  hc_tooltip(formatter = JS("function() { return '<b>' + this.point.name + '</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"))
+
+
+
+```
+]
+
+]
+
+---
+
+### Perda não técnica nas concessionárias do RJ
+#### No Rio de Janeiro, a Light possui percentual de PNT maior do que a Enel RJ em toda a série histórica
+
+###### Fonte: ANEEL - Perda não técnica sobre Energia Injetada (2008-2023)
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, out.width='100%'}
+
+
+pnt_aneel_br_rj <- pnt_aneel_base %>%
+  filter(!is.na(ano),
+         uf == "RJ") %>%
+
+  group_by(ano, distribuidora) %>%
+  summarise(energia_injetada_m_wh = sum(energia_injetada_m_wh,na.rm = TRUE),
+            perda_nao_tecnica_real_m_wh = sum(perda_nao_tecnica_real_m_wh,na.rm = TRUE)) %>%
+  ungroup() %>%
+
+  mutate(pnt_real_sobre_energia_injetada = perda_nao_tecnica_real_m_wh*100/energia_injetada_m_wh,
+         pnt_real_sobre_energia_injetada_formatado = formattable::percent(pnt_real_sobre_energia_injetada, digits = 2, decimal.mark = ","))
+
+
+
+
+hchart(pnt_aneel_br_rj, type = "line", hcaes(x = ano, y = pnt_real_sobre_energia_injetada, group = distribuidora)) %>%
+  
+  # Paleta de cores personalizada
+  hc_colors(colors = c("#EA7542", "#005270")) %>%  # Ordem importa: 1º grupo → azul, 2º → laranja
+
+  # Eixos
+  hc_xAxis(
+    title = list(text = "Ano", style = list(fontFamily = "Montserrat"))
+  ) %>%
+  hc_yAxis(
+    title = list(text = "PNT (%)", style = list(fontFamily = "Montserrat")),
+    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.')+ ' %'; }"))
+  ) %>%
+
+  # Estilo visual
+  hc_chart(backgroundColor = "transparent") %>%
+  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+  
+  hc_plotOptions(
+    series = list(
+      borderWidth = 0,
+      dataLabels = list(
+        enabled = TRUE,
+        formatter = JS("function() { return Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"),
+        style = list(fontFamily = "Montserrat"),
+        inside = FALSE
+      )
+    )
+  ) %>%
+  
+  # Tooltip com formatação
+  hc_tooltip(formatter = JS("function() { return '<b>' + this.series.name + '</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"))
+  # hc_add_series(name = "PNT (%)",
+  #               data = round(pnt_subestacoes_ano$pnt_percent * 100, 2),
+  #               type = "line", yAxis = 1,
+  #               color = "#EA7542") %>%
+#   hc_add_series(
+#   data = list(list(x = 2023, y = 31.07, name = "% Auferido pela Light")),
+#   type = "scatter",
+#   marker = list(symbol = "circle", radius = 4, fillColor = "#000000"),
+#   dataLabels = list(
+#     enabled = TRUE,
+#     format = "% Auferido pela Light",
+#     align = "left",
+#     verticalAlign = "middle",
+#     style = list(
+#       fontFamily = "Montserrat",
+#       fontSize = "10px"
+#     )
+#   ),
+#   enableMouseTracking = FALSE,
+#   showInLegend = FALSE
+# )
+  
+#   hc_annotations(
+#   list(
+#     labels = list(
+#       list(
+#         point = list(x = 2023, y = 10, xAxis = 0, yAxis = 5),
+#         text = "ANEEL",
+#         backgroundColor = "rgba(255,255,255,0.7)",
+#         borderColor = "#000000",
+#         style = list(fontFamily = "Montserrat", fontSize = "11px")
+#       )
+#     )
+#   )
+# )
+
+
+```
+
+
+
+---
+
+### PNT absoluto e %PNT de subestação na área de concessão da LIGHT
+#### Quase todas as subestações da Light possuem percentual de PNT superior à média brasileira
+###### Fonte: LIGHT - Balanço Histórico SETD (2024)
+
+.panelset[
+
+.panel[.panel-name[Gráfico]
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=5.5, out.width='100%'}
+
+
+pnt_subestacoes_contribuicao <- pnt_subestacoes_contribuicao_base %>%
+  filter(subestacao_index != 0) %>%
+  mutate(pnt_percent = pnt_percent*100,
+         percent_absoluto = percent_absoluto * 100)
+
+
+
+media_nacional_aneel <- pnt_aneel_base %>%
+  filter(!is.na(ano),
+         uf != "RJ") %>%
+
+  group_by(ano) %>%
+  summarise(energia_injetada_m_wh = sum(energia_injetada_m_wh,na.rm = TRUE),
+            perda_nao_tecnica_real_m_wh = sum(perda_nao_tecnica_real_m_wh,na.rm = TRUE)) %>%
+  ungroup() %>%
+
+  mutate(pnt_real_sobre_energia_injetada = perda_nao_tecnica_real_m_wh*100/energia_injetada_m_wh,
+         pnt_real_sobre_energia_injetada_formatado = formattable::percent(pnt_real_sobre_energia_injetada, digits = 2, decimal.mark = ",")) %>%
+  
+  summarise(pnt_real_sobre_energia_injetada = mean(pnt_real_sobre_energia_injetada,na.rm = TRUE)) %>%
+  pull
+
+
+
+
+media_RJ_aneel <- pnt_aneel_base %>%
+  filter(!is.na(ano),
+         uf == "RJ") %>%
+
+  group_by(ano) %>%
+  summarise(energia_injetada_m_wh = sum(energia_injetada_m_wh,na.rm = TRUE),
+            perda_nao_tecnica_real_m_wh = sum(perda_nao_tecnica_real_m_wh,na.rm = TRUE)) %>%
+  ungroup() %>%
+
+  mutate(pnt_real_sobre_energia_injetada = perda_nao_tecnica_real_m_wh*100/energia_injetada_m_wh,
+         pnt_real_sobre_energia_injetada_formatado = formattable::percent(pnt_real_sobre_energia_injetada, digits = 2, decimal.mark = ",")) %>%
+  
+  summarise(pnt_real_sobre_energia_injetada = mean(pnt_real_sobre_energia_injetada,na.rm = TRUE)) %>%
+  pull
+
+
+
+
+
+media_light_aneel <- pnt_aneel_base %>%
+  filter(!is.na(ano),
+         distribuidora == "Light") %>%
+
+  group_by(ano) %>%
+  summarise(energia_injetada_m_wh = sum(energia_injetada_m_wh,na.rm = TRUE),
+            perda_nao_tecnica_real_m_wh = sum(perda_nao_tecnica_real_m_wh,na.rm = TRUE)) %>%
+  ungroup() %>%
+
+  mutate(pnt_real_sobre_energia_injetada = perda_nao_tecnica_real_m_wh*100/energia_injetada_m_wh,
+         pnt_real_sobre_energia_injetada_formatado = formattable::percent(pnt_real_sobre_energia_injetada, digits = 2, decimal.mark = ",")) %>%
+  
+  summarise(pnt_real_sobre_energia_injetada = mean(pnt_real_sobre_energia_injetada,na.rm = TRUE)) %>%
+  pull
+
+
+# Cálculos necessários:
+p90 <- as.numeric(quantile(pnt_subestacoes_contribuicao$pnt_percent, 0.9))
+media <- mean(pnt_subestacoes_contribuicao$pnt_percent)
+sd <- sd(pnt_subestacoes_contribuicao$pnt_percent )
+limite_superior <- media + 2 * sd
+
+
+
+
+
+
+
+quantis <- quantile(pnt_subestacoes_contribuicao$pnt_percent, probs = c(0.75, 0.90, 0.95), na.rm = TRUE)
+
+p75 <- quantis[[1]]
+p90 <- quantis[[2]]
+p95 <- quantis[[3]]
+
+
+
+
+
+# 1. Categoriza por faixa
+pnt_subestacoes_contribuicao <- pnt_subestacoes_contribuicao %>%
+  mutate(
+    faixa = case_when(
+      pnt_percent <= media_nacional_aneel ~ "Abaixo da média nacional",
+      pnt_percent <= p75 ~ "Entre média nacional e p75",
+      pnt_percent <= p90 ~ "Entre p75 e p90",
+      pnt_percent <= p95 ~ "Entre p90 e p95",
+      TRUE ~ "Acima de p95"
+    )
+  ) %>%
+  mutate(
+    faixa = factor(
+      faixa,
+      levels = c(
+        "Abaixo da média nacional",
+        "Entre média nacional e p75",
+        "Entre p75 e p90",
+        "Entre p90 e p95",
+        "Acima de p95"
+      )
+    )
+  )
+
+
+# 2. Cores por faixa
+cores_faixa <- c(
+  "Abaixo da média nacional" = "grey",
+  "Entre média nacional e p75" = "#FFCB8F",
+  "Entre p75 e p90" = "#FFAB4A",
+  "Entre p90 e p95" = "#EA7542",
+  "Acima de p95" = "#A20021"
+)
+
+
+# Ajuste linear (reta de regressão)
+modelo <- lm(pnt_percent ~ perda_nao_tecnica, data = pnt_subestacoes_contribuicao)
+
+# Coeficientes da reta
+a <- coef(modelo)[1]
+b <- coef(modelo)[2]
+
+
+eq_label <- sprintf("y = %.2f + %.2f·x", a, b)
+
+
+# Gerar pontos da reta usando o modelo
+reta_r2  <- data.frame(
+  perda_nao_tecnica = seq(min(pnt_subestacoes_contribuicao$perda_nao_tecnica), max(pnt_subestacoes_contribuicao$perda_nao_tecnica), length.out = 100)
+) %>%
+  mutate(pnt_percent = a + b * perda_nao_tecnica)
+
+
+
+# Gráfico com linhas verticais
+hchart(
+  pnt_subestacoes_contribuicao,
+  "scatter",
+  hcaes(y = pnt_percent, x = perda_nao_tecnica, name = subestacao_index, name2 = subestacoes, group = faixa)
+) %>%
+  # hc_colors(c("#72C8ED", "#FFAB4A", "#EA7542", "#005290")) %>%
+  hc_colors(c("grey", "#FFCB8F", "#FFAB4A", "#EA7542", "#A20021")) %>%
+  hc_chart(backgroundColor = "transparent") %>%
+  hc_yAxis(
+    title = list(text = "PNT (%) na subestação", style = list(fontFamily = "Montserrat")),
+    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.') + ' %'; }"))
+  ) %>%
+  hc_xAxis(
+    # min = -0.5,
+    # max = 4,
+    title = list(text = "Perda não técnica (kWh)", style = list(fontFamily = "Montserrat")),
+    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.'); }"))
+  ) %>%
+  hc_tooltip(formatter = JS("
+    function() {
+      return '<b>' + this.point.name2 + '</b><br>' +
+             '<b>PNT (%) na subestação</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %' + '<br>' +
+             '<b>Perda não técnica (kWh)</b>: ' + Highcharts.numberFormat(this.x, 0, ',', '.') ;
+    }
+  ")) %>%
+   # Linhas verticais com legenda
+  # hc_add_series(data = list(list(x = media_nacional_aneel, y = -1), list(x = media_nacional_aneel, y = max(pnt_subestacoes_contribuicao$percent_absoluto)+6)),
+  #               type = "line", name = "Média nacional sem RJ", color = "#FFCB8F",
+  #               dashStyle = "ShortDash", enableMouseTracking = FALSE,
+  #               marker = list(enabled = FALSE), showInLegend = TRUE) %>%
+  # 
+  # # hc_add_series(data = list(list(x = p90, y = -1), list(x = p90, y = max(pnt_subestacoes_contribuicao$percent_absoluto)+6)),
+  # #               type = "line", name = "Linha P90", color = "#EA7542",
+  # #               dashStyle = "ShortDash", enableMouseTracking = FALSE,
+  # #               marker = list(enabled = FALSE), showInLegend = TRUE) %>%
+  # # 
+  # # hc_add_series(data = list(list(x = limite_superior, y = -1), list(x = limite_superior, y = max(pnt_subestacoes_contribuicao$percent_absoluto)+6)),
+  # #               type = "line", name = "Média + 2SD", color = "#005290",
+  # #               dashStyle = "ShortDash", enableMouseTracking = FALSE,
+  # #               marker = list(enabled = FALSE), showInLegend = TRUE) %>%
+  # 
+  # 
+  # hc_add_series(data = list(list(x = p75, y = -1), list(x = p75, y = max(pnt_subestacoes_contribuicao$percent_absoluto)+6)),
+  #             type = "line", name = "Linha P75", color = "#FFAB4A",
+  #             dashStyle = "ShortDash", enableMouseTracking = FALSE,
+  #             marker = list(enabled = FALSE), showInLegend = TRUE) %>%
+  # 
+  # 
+  # hc_add_series(data = list(list(x = p90, y = -1), list(x = p90, y = max(pnt_subestacoes_contribuicao$percent_absoluto)+6)),
+  #               type = "line", name = "Linha P90", color = "#EA7542",
+  #               dashStyle = "ShortDash", enableMouseTracking = FALSE,
+  #               marker = list(enabled = FALSE), showInLegend = TRUE) %>%
+  # 
+  # hc_add_series(data = list(list(x = p95, y = -1), list(x = p95, y = max(pnt_subestacoes_contribuicao$percent_absoluto)+6)),
+  #             type = "line", name = "Linha P95", color = "#A20021",
+  #             dashStyle = "ShortDash", enableMouseTracking = FALSE,
+  #             marker = list(enabled = FALSE), showInLegend = TRUE) %>%
+# 
+  hc_add_series(data = reta_r2, type = "line",
+                hcaes(x = perda_nao_tecnica, y = pnt_percent),
+                name = "Regressão linear", color = "#000000", dashStyle = "ShortDash",
+                marker = list(enabled = FALSE),
+                enableMouseTracking = FALSE,
+                showInLegend = TRUE) %>%
+
+  hc_plotOptions(
+    scatter = list(
+      dataLabels = list(
+        enabled = TRUE,
+        format = "{point.name}",
+        style = list(fontSize = '10px', fontFamily = 'Montserrat')
+      ),
+      marker = list(radius = 6)
+    )
+  ) %>%
+  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+  hc_annotations(list(
+  labels = list(
+    list(
+      point = list(xAxis = 0, yAxis = 0, x = 270000, y = max(pnt_subestacoes_contribuicao$pnt_percent)+15),
+      text = eq_label,
+      backgroundColor = "rgba(255,255,255,0.7)",
+      borderColor = "gray",
+      style = list(fontSize = "12px", fontFamily = "Montserrat")
+    )
+  )
+))
+
+
+
+
+```
+]
+
+.panel[.panel-name[Mapa]
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=5, out.width='100%'}
+
+
+# tratamento e sumarização dos dados de PNT por subestação
+subestacoes_mapa <- pnt_subestacoes_contribuicao %>%
+  mutate(pnt_percent = round(pnt_percent, 2)) %>%
+  left_join(shp_area_subestacoes) %>%
+  st_as_sf() 
+
+
+
+
+pal <- colorFactor(
+  palette = c(
+  "Abaixo da média nacional" = "grey",
+  "Entre média nacional e p75" = "#FFCB8F",
+  "Entre p75 e p90" = "#FFAB4A",
+  "Entre p90 e p95" = "#EA7542",
+  "Acima de p95" = "#A20021"
+),
+  domain = subestacoes_mapa$faixa
+)
+
+
+
+
+
+leaflet(subestacoes_mapa) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+      addPolygons(fillColor = ~pal(faixa),
+                weight = 1,
+                opacity = 1,
+                color = "lightgrey",
+                dashArray = "3",
+                fillOpacity = 0.9,
+                label = lapply(paste0("<span style='font-size:12px'>",subestacoes_mapa$subestacoes, "</span><br>",
+                                      "<span style='font-size:12px'> Percentual médio: ",subestacoes_mapa$pnt_percent, "</span>"),
+                               htmltools::HTML),
+                highlightOptions = highlightOptions(
+                  weight = 1.5,
+                  color = "black",
+                  dashArray = "",
+                  fillOpacity = 1,
+                  bringToFront = TRUE)) %>%
+  addLegend(
+    position = "bottomright",
+    pal = pal,
+    values = subestacoes_mapa$faixa,
+    title = "PNT (%)",
+    opacity = 0.8
+    # labFormat = labelFormat(suffix = "%")
+  )
+
+
+```
+]
+
+
+]
+
+---
+
+### Subestações em Áreas com Severas Restrições Operacionais
+#### Esse fenômeno não está necessariamente vinculado à presença de ASRO
+###### Fonte: LIGHT - Balanço Histórico SETD (2024)
+
+.panelset[
+
+.panel[.panel-name[Gráfico]
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=5.5, out.width='100%'}
+
+
+# Pré-processamento
+pnt_subestacoes_contribuicao <- pnt_subestacoes_contribuicao_base %>%
+  filter(subestacao_index != 0) %>%
+  mutate(
+    pnt_percent = pnt_percent * 100,
+    percent_absoluto = percent_absoluto * 100
+  )
+
+# Definição dos quadrantes
+pnt_subestacoes_contribuicao <- pnt_subestacoes_contribuicao %>%
+  mutate(
+    faixa = case_when(
+      perc_asro <= 20 & pnt_percent <= 40 ~ "Quadrante 1 (Baixo ASRO / Baixo PNT)",
+      perc_asro > 20 & pnt_percent <= 40  ~ "Quadrante 2 (Alto ASRO / Baixo PNT)",
+      perc_asro <= 20 & pnt_percent > 40  ~ "Quadrante 3 (Baixo ASRO / Alto PNT)",
+      perc_asro > 20 & pnt_percent > 40   ~ "Quadrante 4 (Alto ASRO / Alto PNT)"
+    ),
+    faixa = factor(
+      faixa,
+      levels = c(
+        "Quadrante 1 (Baixo ASRO / Baixo PNT)",
+        "Quadrante 2 (Alto ASRO / Baixo PNT)",
+        "Quadrante 3 (Baixo ASRO / Alto PNT)",
+        "Quadrante 4 (Alto ASRO / Alto PNT)"
+      )
+    )
+  )
+
+# Paleta de cores para os quadrantes
+# cores_faixa <- c(
+#   "Quadrante 1 (Baixo ASRO / Baixo PNT)" = "#f0d9e0",
+#   "Quadrante 2 (Alto ASRO / Baixo PNT)"  = "#d699ad",
+#   "Quadrante 3 (Baixo ASRO / Alto PNT)"  = "#b84c70",
+#   "Quadrante 4 (Alto ASRO / Alto PNT)"   = "#7a0029"
+# )
+
+
+# Ajuste da reta r2 (regressão linear)
+modelo <- lm(pnt_percent ~ perc_asro, data = pnt_subestacoes_contribuicao)
+a <- coef(modelo)[1]
+b <- coef(modelo)[2]
+
+
+eq_label <- sprintf("y = %.2f + %.2f·x", a, b)
+
+
+reta_r2 <- data.frame(
+  perc_asro = seq(min(pnt_subestacoes_contribuicao$perc_asro), max(pnt_subestacoes_contribuicao$perc_asro), length.out = 100)
+) %>%
+  mutate(pnt_percent = a + b * perc_asro)
+
+# Gráfico com os quadrantes e reta de tendência
+hchart(
+  pnt_subestacoes_contribuicao,
+  "scatter",
+  hcaes(y = pnt_percent, x = perc_asro, name = subestacao_index, name2 = subestacoes, group = faixa)
+) %>%
+  hc_colors(c("#f0d9e0", "#d699ad", "#b84c70", "#7a0029")) %>%
+  hc_chart(backgroundColor = "transparent") %>%
+  hc_yAxis(
+    title = list(text = "PNT (%) na subestação", style = list(fontFamily = "Montserrat")),
+    plotLines = list(
+      list(color = "darkgrey", value = 40, width = 1, zIndex = 5)
+    ),
+    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.') + ' %'; }"))
+  ) %>%
+  hc_xAxis(
+    min = 0,
+    max = 80,
+    title = list(text = "Percentual de área coberta por ASRO", style = list(fontFamily = "Montserrat")),
+    plotLines = list(
+      list(color = "darkgrey", value = 20, width = 1, zIndex = 5)
+    ),
+    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.') + ' %'; }"))
+  ) %>%
+  hc_add_series(data = reta_r2, type = "line",
+                hcaes(x = perc_asro, y = pnt_percent),
+                name = "Regressão linear", color = "darkgrey", dashStyle = "ShortDash",
+                marker = list(enabled = FALSE),
+                enableMouseTracking = FALSE,
+                showInLegend = TRUE) %>%
+  hc_tooltip(formatter = JS("
+  function() {
+    return '<b>' + this.point.name2 + '</b><br>' +
+           '<b>PNT (%) na subestação</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %' + '<br>' +
+           '<b>% coberto por ASRO</b>: ' + Highcharts.numberFormat(this.x, 2, ',', '.') + ' %';
+  }
+")) %>%
+  hc_plotOptions(
+    scatter = list(
+      dataLabels = list(
+        enabled = TRUE,
+        format = "{point.name}",
+        style = list(fontSize = '10px', fontFamily = 'Montserrat')
+      ),
+      marker = list(radius = 6)
+    )
+  ) %>%
+  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+  hc_annotations(list(
+  labels = list(
+    list(
+      point = list(xAxis = 0, yAxis = 0, x = 70, y = max(pnt_subestacoes_contribuicao$pnt_percent)+15),
+      text = eq_label,
+      backgroundColor = "rgba(255,255,255,0.7)",
+      borderColor = "gray",
+      style = list(fontSize = "12px", fontFamily = "Montserrat")
+    )
+  )
+))
+
+
+
+```
+]
+
+.panel[.panel-name[Mapa]
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=5, out.width='100%'}
+
+
+# tratamento e sumarização dos dados de PNT por subestação
+subestacoes_mapa <- pnt_subestacoes_contribuicao %>%
+  mutate(pnt_percent = round(pnt_percent, 2)) %>%
+  left_join(shp_area_subestacoes) %>%
+  st_as_sf() 
+
+
+
+
+# pal <- colorFactor(
+#   palette = c(
+#   "Abaixo da média nacional" = "#D0E6F2",
+#   "Entre média nacional e p75" = "#FFCB8F",
+#   "Entre p75 e p90" = "#FFAB4A",
+#   "Entre p90 e p95" = "#EA7542",
+#   "Acima de p95" = "#A20021"
+# ),
+#   domain = subestacoes_mapa$faixa
+# )
+
+
+# cores_faixa <- c(
+#   "Abaixo da média nacional"      = "#D0E6F2",  # Azul bem claro
+#   "Entre média nacional e p75"    = "#A0C4DE",  # Azul claro
+#   "Entre p75 e p90"               = "#5A9BCF",  # Azul médio
+#   "Entre p90 e p95"               = "#1F77B4",  # Azul escuro
+#   "Acima de p95"                  = "#08306B"   # Azul muito escuro
+# )
+
+
+
+cores_faixa <- c(
+  "Quadrante 1 (Baixo ASRO / Baixo PNT)" = "#f0d9e0",
+  "Quadrante 2 (Alto ASRO / Baixo PNT)"  = "#d699ad",
+  "Quadrante 3 (Baixo ASRO / Alto PNT)"  = "#b84c70",
+  "Quadrante 4 (Alto ASRO / Alto PNT)"   = "#7a0029"
+)
+
+
+
+pal <- colorFactor(
+  palette = unname(cores_faixa),
+  domain = subestacoes_mapa$faixa
+)
+
+
+
+leaflet(subestacoes_mapa) %>%
+  addProviderTiles(providers$CartoDB.Positron) %>%
+      addPolygons(fillColor = ~pal(faixa),
+                weight = 1,
+                opacity = 1,
+                color = "lightgrey",
+                dashArray = "3",
+                fillOpacity = 0.9,
+                label = lapply(paste0("<span style='font-size:12px'>",subestacoes_mapa$subestacoes, "</span><br>",
+                                      "<span style='font-size:12px'> Percentual médio: ",subestacoes_mapa$pnt_percent, "</span>"),
+                               htmltools::HTML),
+                highlightOptions = highlightOptions(
+                  weight = 1.5,
+                  color = "black",
+                  dashArray = "",
+                  fillOpacity = 1,
+                  bringToFront = TRUE)) %>%
+  addLegend(
+    position = "bottomright",
+    pal = pal,
+    values = subestacoes_mapa$faixa,
+    title = "PNT (%)",
+    opacity = 0.8
+    # labFormat = labelFormat(suffix = "%")
+  )
+
+
+```
+]
+
+
+]
+
+
+---
+
+
+
+
+### Energia fornecida, perda não técnica e PNT (%) na área de concessão da LIGHT por ano
+#### O percentual de PNT apresenta aumento a partir de 2023
+###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
+
+.panelset[
+
+
+.panel[.panel-name[Tabela]
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6, out.width='100%'}
+
+
+pnt_subestacoes_ano <-
+  subestacoes_tratado %>%
+  group_by(ano) %>%
+  summarise(subestacoes = length(unique(subestacoes)),
+            energia_fornecida_total = sum(energia_fornecida_total,na.rm = TRUE),
+            perda_nao_tecnica = sum(perda_nao_tecnica,na.rm = TRUE)) %>%
+  mutate(pnt_percent = perda_nao_tecnica/energia_fornecida_total)
+
+
+
+# Tabela com Reactable
+reactable(
+  pnt_subestacoes_ano,
+  defaultColDef = colDef(align = "center", vAlign = "center", headerVAlign = "center",
+    headerStyle = list(
+      background = "#005270",
+      color = "white"
+    )),
+  columns = list(
+    ano = colDef(name = "Ano"),
+    subestacoes = colDef(name = "Subestações", format = colFormat(separators = TRUE, digits = 0)),
+    energia_fornecida_total = colDef(name = "Energia fornecida", format = colFormat(separators = TRUE, digits = 0)),
+    perda_nao_tecnica = colDef(name = "Perda não técnica", format = colFormat(separators = TRUE, digits = 0)),
+    pnt_percent = colDef(name = "PNT (%)", format = colFormat(digits = 2, percent = T))
+  ),
+  bordered = TRUE,
+  striped = TRUE,
+  highlight = TRUE,
+  pagination = T,
+  theme = reactableTheme(
+    borderColor = "#E0E0E0",
+    stripedColor = "#F8F8F8",
+    highlightColor = "#EAEAEA",
+    cellPadding = "8px 12px",
+    style = list(fontSize = "15px", fontFamily = "Montserrat, Arial, sans-serif"),
+    searchInputStyle = list(width = "100%")
+  )
+)
+
+
+```
+]
+
+.panel[.panel-name[Gráfico]
+```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=5.5, out.width='100%'}
+
+
+# highchart() %>%
+#   hc_chart(type = "column", backgroundColor = "transparent") %>%
+#   # hc_title(text = "Energia fornecida, perda não técnica e PNT (%) na área de concessão da LIGHT por ano", style = list(fontFamily = "Montserrat")) %>%
+#   hc_xAxis(categories = pnt_subestacoes_ano$ano, title = list(text = "Ano", style = list(fontFamily = "Montserrat"))) %>%
+#   hc_yAxis_multiples(
+#     list(title = list(text = "Energia fornecida e PNT", style = list(fontFamily = "Montserrat")),
+#          opposite = FALSE, gridLineWidth = 0.5, gridLineColor = "#E0E0E0",
+#          labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.'); }"))),
+#     list(title = list(text = "PNT (%)", style = list(fontFamily = "Montserrat")),
+#          opposite = TRUE, gridLineWidth = 0.5, gridLineColor = "#E0E0E0", min = 0,
+#          labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.')+ ' %'; }")))) %>%
+#   hc_add_series(name = "Energia fornecida", data = round(pnt_subestacoes_ano$energia_fornecida_total, 0), type = "column", yAxis = 0) %>%
+#   hc_add_series(name = "Perda não técnica", data = round(pnt_subestacoes_ano$perda_nao_tecnica, 0), type = "column", yAxis = 0) %>%
+#   hc_add_series(name = "PNT (%)", data = round(pnt_subestacoes_ano$pnt_percent*100, 2), type = "line", yAxis = 1, color = "gold") %>%
+#   hc_plotOptions(series = list(borderWidth = 0)) %>%
+#   hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+#   hc_tooltip(formatter = JS("function() { return '<b>' + this.series.name + '</b>: ' + Highcharts.numberFormat(this.y, (this.series.name.includes('%') ? 2 : 0), ',', '.') + ' %'; }"))
+
+
+highchart() %>%
+  hc_chart(type = "column", backgroundColor = "transparent") %>%
+  # hc_title(text = "Energia fornecida, perda não técnica e PNT (%) na área de concessão da LIGHT por ano", style = list(fontFamily = "Montserrat")) %>%
+  hc_xAxis(categories = pnt_subestacoes_ano$ano, 
+           title = list(text = "Ano", style = list(fontFamily = "Montserrat"))) %>%
+  hc_yAxis_multiples(
+    list(
+      title = list(text = "Energia fornecida e PNT", style = list(fontFamily = "Montserrat")),
+      opposite = FALSE, gridLineWidth = 0.5, gridLineColor = "#E0E0E0",
+      labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.'); }"))
+    ),
+    list(
+      title = list(text = "PNT (%)", style = list(fontFamily = "Montserrat")),
+      opposite = TRUE, gridLineWidth = 0.5, gridLineColor = "#E0E0E0", min = 0,
+      labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.')+ ' %'; }"))
+    )
+  ) %>%
+  hc_add_series(name = "Energia fornecida",
+                data = round(pnt_subestacoes_ano$energia_fornecida_total, 0),
+                type = "column", yAxis = 0,
+                color = "#005270") %>%
+  hc_add_series(name = "Perda não técnica",
+                data = round(pnt_subestacoes_ano$perda_nao_tecnica, 0),
+                type = "column", yAxis = 0,
+                color = "#72C8ED") %>%
+  hc_add_series(name = "PNT (%)",
+                data = round(pnt_subestacoes_ano$pnt_percent * 100, 2),
+                type = "line", yAxis = 1,
+                color = "#EA7542") %>%
+  hc_plotOptions(series = list(borderWidth = 0)) %>%
+  
+  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+  hc_tooltip(formatter = JS("
+    function() {
+      return '<b>' + this.series.name + '</b>: ' + 
+             Highcharts.numberFormat(this.y, (this.series.name.includes('%') ? 2 : 0), ',', '.') + 
+             (this.series.name.includes('%') ? ' %' : '');
+    }
+  "))
+
+
+
+```
+]
+]
+
+
+---
+
+### Quais subestações sustentaram esse aumento? 
+#### 84 das 94 subestações registraram aumento do percentual de PNT de 2022 para 2023
+###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+# Tabela com Reactable
+
+pnt_subestacoes_contribuicao_base %>%
+  mutate(variacao_percentual = pnt_percent2023 - pnt_percent2022) %>%
+  select(subestacoes, pnt_percent2022, pnt_percent2023, variacao_percentual, contribuicao_variacao_pnt_2223) %>%
+  arrange(desc(contribuicao_variacao_pnt_2223)) %>%
+  
+  reactable(
+    defaultColDef = colDef(align = "center", vAlign = "center", headerVAlign = "center",
+      headerStyle = list(
+        background = "#005270",
+        color = "white"
+      )),
+    columns = list(
+      # subestacao_index = colDef(name = "Índice"),
+      subestacoes = colDef(name = "Subestações"),
+      pnt_percent2022 = colDef(name = "%PNT 2022", format = colFormat(digits = 2, percent = T)),
+      pnt_percent2023 = colDef(name = "%PNT 2023", format = colFormat(digits = 2, percent = T)),
+      variacao_percentual = colDef(name = "Variação percentual", format = colFormat(digits = 2, percent = T)),
+      contribuicao_variacao_pnt_2223 = colDef(name = "Contribuição relativa", format = colFormat(digits = 2, percent = T))
+    ),
+    bordered = TRUE,
+    striped = TRUE,
+    highlight = TRUE,
+    pagination = FALSE,
+    style = list(maxHeight = "400px", overflowY = "auto"),
+    defaultPageSize = 10,
+    theme = reactableTheme(
+      borderColor = "#E0E0E0",
+      stripedColor = "#F8F8F8",
+      highlightColor = "#EAEAEA",
+      cellPadding = "8px 12px",
+      style = list(fontSize = "13px", fontFamily = "Montserrat, Arial, sans-serif"),
+  
+      searchInputStyle = list(width = "100%")
+    )
+  )
+
+
+
+
+```
+
+
+---
+
+### Principais achados
+
+
+- <h5 style="color: black;"><strong>Destaque para o Estado do Rio de Janeiro</strong> <br> 
+<span style="font-weight: normal;">O RJ ocupa a 3ª posição entre os estados com maior percentual de PNT, consistentemente acima da média nacional ao longo de todo o período analisado.</span></h5>
+
+- <h5 style="color: black;"><strong>Alto percentual de PNT é generalizado na área de concessão</strong> <br>
+<span style="font-weight: normal;">Quase todas as subestações da Light possuem percentual de PNT superior à média brasileira (5%).</span></h5>
+
+- <h5 style="color: black;"><strong>Alto percentual de PNT em áreas com baixa presença de ASRO</strong> <br>
+<span style="font-weight: normal;">A presença de ASRO, por si só, não é suficiente para explicar os altos percentuais de PNT nas subestações.</span></h5>
+
+- <h5 style="color: black;"><strong>Elevação nos percentuais de PNT a partir de 2023</strong> <br> 
+<span style="font-weight: normal;">O percentual de PNT na área de concessão da Light (RJ) se manteve estável entre 2019 e 2022 (~25%), apresentando uma elevação significativa alcançando 31% em 2023 e 2024.</span></h5>
+
+- <h5 style="color: black;"><strong>Referência para valor de %PNT elevado (RJ)</strong> <br>
+<span style="font-weight: normal;">No contexto da área de concessão da Light (RJ), podemos considerar um percentual de PNT elevado quando superar 42% (calculado como média + 2 desvios padrão).</span></h5>
+
+- <h5 style="color: black;"><strong>Subestações com alto percentual de PNT</strong> <br>
+<span style="font-weight: normal;">Em 2024, 24 das 94 subestações do RJ encerraram o ano com %PNT acima de 42%.</span></h5>
+
+
+
+---
+
+class: inverse, center, middle
+background-image: url("dados/Slide2.jpg")
+background-size: cover
+background-position: center
+
+# <span style="margin-right: 40px; color: white !important;">Obrigado</span>
+
+### <span style="margin-right: 40px; color: white !important; font-weight: 500;">lemelab.org</span>
+
+
+
+
+
+
+
+
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.height=6.5, out.width='100%'}
+
+### Extra: Fatores de sazonalidade na área de concessão da LIGHT por mês
+###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
+
+
+# Início do ajuste da série temporal
+ts_data <-
+subestacoes_tratado %>%
+  group_by(periodo) %>%
+  summarise(energia_fornecida_total = sum(energia_fornecida_total,na.rm = TRUE),
+            perda_nao_tecnica = sum(perda_nao_tecnica,na.rm = TRUE)) %>%
+  mutate(pnt_percent = perda_nao_tecnica*100/energia_fornecida_total) %>%
+  select(pnt_percent) %>%
+  ts(start = c(2018, 10), frequency = 12) 
+
+fatores_sazonalidade <- decompose(ts_data)$seasonal
+fatores_sazonalidade <- fatores_sazonalidade[(-11+length(fatores_sazonalidade)):length(fatores_sazonalidade)]
+
+meses <- c('Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez')
+
+
+# Definir cores com base nos valores
+generate_colors <- function(values) {
+  colorRampPalette(c("#72C8ED", "#e74c3c"))(length(unique(values)))[rank(values)]
+}
+colors <- generate_colors(fatores_sazonalidade)
+
+# Gráfico com Highcharter
+highchart() %>%
+  hc_chart(type = "column", backgroundColor = "transparent") %>%
+  # hc_title(text = "Fatores de sazonalidade na área de concessão da LIGHT por mês", style = list(fontFamily = "Montserrat")) %>%
+  hc_xAxis(categories = meses, title = list(text = "Mês", style = list(fontFamily = "Montserrat"))) %>%
+  hc_yAxis(title = list(text = "Fator de Sazonalidade", style = list(fontFamily = "Montserrat")), 
+           gridLineWidth = 0.5, gridLineColor = "#E0E0E0",
+           labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.') + ' %'; }"))) %>%
+  hc_add_series(
+    name = "Fatores de Sazonalidade", 
+    data = round(fatores_sazonalidade, 3), 
+    type = "column", 
+    colorByPoint = TRUE, 
+    colors = colors
+  ) %>%
+  hc_plotOptions(
+    series = list(
+      borderWidth = 0,
+      dataLabels = list(
+        enabled = TRUE,
+        formatter = JS("function() { return Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"),
+        style = list(fontFamily = "Montserrat"),
+        inside = FALSE
+      )
+    )
+  ) %>%
+  hc_tooltip(formatter = JS("function() { return '<b>' + this.x + '</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.'); + ' %'; }")) %>%
+  hc_legend(enabled = FALSE)
+
+
+
+
+
+```
+
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.height=6.5, out.width='100%'}
+
+
+---
+
+### Extra: Série histórica de PNT (%) na área de concessão da LIGHT por mês/ano
+###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
+
+
+  
+pnt_subestacoes_periodo <-
+  subestacoes_tratado %>%
+  group_by(periodo) %>%
+  summarise(subestacoes = length(unique(subestacoes)),
+            energia_fornecida_total = sum(energia_fornecida_total,na.rm = TRUE),
+            perda_nao_tecnica = sum(perda_nao_tecnica,na.rm = TRUE)) %>%
+  mutate(pnt_percent = perda_nao_tecnica*100/energia_fornecida_total)
+
+
+
+
+# Separando os períodos
+pnt_subestacoes_periodo_2019_2022 <- pnt_subestacoes_periodo %>% filter(periodo < "2023-01-01")
+pnt_subestacoes_periodo_2023_2024 <- pnt_subestacoes_periodo %>% filter(periodo >= "2023-01-01")
+
+# Calculando estatísticas para cada período
+dist_stats_2019_2022 <- pnt_subestacoes_periodo_2019_2022 %>%
+  summarise(median = median(pnt_percent, na.rm = TRUE),
+            sd = sd(pnt_percent, na.rm = TRUE))
+
+dist_stats_2023_2024 <- pnt_subestacoes_periodo_2023_2024 %>%
+  summarise(median = median(pnt_percent, na.rm = TRUE),
+            sd = sd(pnt_percent, na.rm = TRUE))
+
+# Calculando médias e limites para cada período
+media_pnt_2019_2022 <- as.numeric(dist_stats_2019_2022$median)
+sd_pnt_2019_2022 <- as.numeric(dist_stats_2019_2022$sd)
+linha_sup_2019_2022 <- media_pnt_2019_2022 + 2 * sd_pnt_2019_2022
+linha_inf_2019_2022 <- media_pnt_2019_2022 - 2 * sd_pnt_2019_2022
+linha_sup_1sd_2019_2022 <- media_pnt_2019_2022 + sd_pnt_2019_2022
+linha_inf_1sd_2019_2022 <- media_pnt_2019_2022 - sd_pnt_2019_2022
+
+
+media_pnt_2023_2024 <- as.numeric(dist_stats_2023_2024$median)
+sd_pnt_2023_2024 <- as.numeric(dist_stats_2023_2024$sd)
+linha_sup_2023_2024 <- media_pnt_2023_2024 + 2 * sd_pnt_2023_2024
+linha_inf_2023_2024 <- media_pnt_2023_2024 - 2 * sd_pnt_2023_2024
+linha_sup_1sd_2023_2024 <- media_pnt_2023_2024 + sd_pnt_2023_2024
+linha_inf_1sd_2023_2024 <- media_pnt_2023_2024 - sd_pnt_2023_2024
+
+
+# Criando o gráfico
+hchart(pnt_subestacoes_periodo, type = "line", hcaes(x = periodo, y = pnt_percent), name = "PNT observado") %>%
+  
+  hc_colors(c("#005270")) %>%  # cor da série principal
+
+  # Personalização dos eixos
+  hc_xAxis(
+    title = list(text = "Período", style = list(fontFamily = "Montserrat"))
+  ) %>%
+  hc_yAxis(
+    title = list(text = "PNT Percent", style = list(fontFamily = "Montserrat")),
+    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.')+ ' %'; }"))
+  ) %>%
+
+  # Médias
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2019-01-01", tz = "UTC")) * 1000, y = media_pnt_2019_2022),
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = media_pnt_2019_2022)
+  ), type = "line", color = "#72C8ED", name = "Média 2019-2022") %>%
+  
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = media_pnt_2023_2024),
+    list(x = as.numeric(as.POSIXct("2025-01-01", tz = "UTC")) * 1000, y = media_pnt_2023_2024)
+  ), type = "line", color = "#72C8ED", name = "Média 2023-2024") %>%
+
+  # Limites ±2SD
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2019-01-01", tz = "UTC")) * 1000, y = linha_sup_2019_2022),
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = linha_sup_2019_2022)
+  ), type = "line", color = "#EA7542", dashStyle = "Dash", name = "Média + 2sd 2019-2022") %>%
+
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2019-01-01", tz = "UTC")) * 1000, y = linha_inf_2019_2022),
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = linha_inf_2019_2022)
+  ), type = "line", color = "#EA7542", dashStyle = "Dash", name = "Média - 2sd 2019-2022") %>%
+
+  # Outras séries de limites (mantive as cores e estilos)
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = linha_sup_2023_2024),
+    list(x = as.numeric(as.POSIXct("2025-01-01", tz = "UTC")) * 1000, y = linha_sup_2023_2024)
+  ), type = "line", color = "#EA7542", dashStyle = "Dash", name = "Média + 2sd 2023-2024") %>%
+
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = linha_inf_2023_2024),
+    list(x = as.numeric(as.POSIXct("2025-01-01", tz = "UTC")) * 1000, y = linha_inf_2023_2024)
+  ), type = "line", color = "#EA7542", dashStyle = "Dash", name = "Média - 2sd 2023-2024") %>%
+
+  # Limites ±1SD
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2019-01-01", tz = "UTC")) * 1000, y = linha_sup_1sd_2019_2022),
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = linha_sup_1sd_2019_2022)
+  ), type = "line", color = "#FFAB4A", dashStyle = "Dash", name = "Média + 1sd 2019-2022") %>%
+
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2019-01-01", tz = "UTC")) * 1000, y = linha_inf_1sd_2019_2022),
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = linha_inf_1sd_2019_2022)
+  ), type = "line", color = "#FFAB4A", dashStyle = "Dash", name = "Média - 1sd 2019-2022") %>%
+  
+  # Limites ±1SD
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = linha_sup_1sd_2023_2024),
+    list(x = as.numeric(as.POSIXct("2025-01-01", tz = "UTC")) * 1000, y = linha_sup_1sd_2023_2024)
+  ), type = "line", color = "#FFAB4A", dashStyle = "Dash", name = "Média + 2sd 2023-2024") %>%
+
+  hc_add_series(data = list(
+    list(x = as.numeric(as.POSIXct("2023-01-01", tz = "UTC")) * 1000, y = linha_inf_1sd_2023_2024),
+    list(x = as.numeric(as.POSIXct("2025-01-01", tz = "UTC")) * 1000, y = linha_inf_1sd_2023_2024)
+  ), type = "line", color = "#FFAB4A", dashStyle = "Dash", name = "Média - 2sd 2023-2024") %>%
+  
+  
+  hc_add_series(
+    data = list(),
+    type = "line",
+    name = "Média",
+    color = "#72C8ED", # azul claro
+    dashStyle = "Solid",
+    lineWidth = 0,
+    showInLegend = TRUE,
+    enableMouseTracking = FALSE,
+    marker = list(enabled = TRUE)
+  ) %>%
+ 
+    
+  # Legenda fictícia para seção "Médias ±1SD"
+  hc_add_series(
+    data = list(),
+    type = "line",
+    name = "Média ±1sd",
+    color = "#FFAB4A", # amarelo
+    dashStyle = "Dash",
+    lineWidth = 0,
+    showInLegend = TRUE,
+    enableMouseTracking = FALSE,
+    marker = list(enabled = TRUE)
+  ) %>%
+  
+  # Legenda fictícia para seção "Médias ±2SD"
+  hc_add_series(
+    data = list(),
+    type = "line",
+    name = "Média ±2sd",
+    color = "#EA7542", # laranja
+    dashStyle = "Dash",
+    lineWidth = 0,
+    showInLegend = TRUE,
+    enableMouseTracking = FALSE,
+    marker = list(enabled = TRUE)
+  ) %>%
+
+  # Personalizações visuais
+  
+  
+  # hc_title(text = "Série histórica de PNT (%) na área de concessão da LIGHT por mês/ano", style = list(fontFamily = "Montserrat")) %>%
+  hc_chart(backgroundColor = "transparent") %>%
+  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+  
+  # Tooltip formatado com separadores
+  hc_tooltip(formatter = JS("function() { return '<b>' + this.series.name + '</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"))
+
+
+```
+
+
+
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
+
+# # Extra: Série histórica de PNT (%) em subestações na área de concessão da LIGHT
+# ###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
+# 
+# .panelset[
+# 
+# .panel[.panel-name[SETD 36]
+
+  # Filtra os dados para a subestação específica
+  subestacao_escolhida <- subestacoes_tratado %>%
+    select(periodo, subestacoes, energia_fornecida_total, perda_nao_tecnica, pnt_percent) %>%
+    mutate(periodo = as.Date(periodo),
+           mes = factor(month(periodo, label = TRUE, abbr = TRUE), 
+                        levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")),
+           ano = factor(year(periodo)),
+           subestacao_index = as.integer(factor(subestacoes, levels = sort(unique(subestacoes))))) %>%
+    filter(subestacao_index == 36) %>%
+    mutate(pnt_percent = pnt_percent * 100)
+  
+  # Separando os períodos
+  subestacao_2019_2022 <- subestacao_escolhida %>% filter(year(periodo) %in% 2019:2022)
+  subestacao_2023_2024 <- subestacao_escolhida %>% filter(year(periodo) %in% 2023:2024)
+  
+  # Calculando estatísticas para cada período
+  dist_stats_2019_2022 <- subestacao_2019_2022 %>%
+    summarise(median = median(pnt_percent, na.rm = TRUE), sd = sd(pnt_percent, na.rm = TRUE))
+  
+  dist_stats_2023_2024 <- subestacao_2023_2024 %>%
+    summarise(median = median(pnt_percent, na.rm = TRUE), sd = sd(pnt_percent, na.rm = TRUE))
+  
+  # Calculando médias e limites para cada período
+  media_pnt_2019_2022 <- as.numeric(dist_stats_2019_2022$median)
+  sd_pnt_2019_2022 <- as.numeric(dist_stats_2019_2022$sd)
+  linha_sup_2019_2022 <- media_pnt_2019_2022 + 2 * sd_pnt_2019_2022
+  linha_inf_2019_2022 <- media_pnt_2019_2022 - 2 * sd_pnt_2019_2022
+  linha_sup_1sd_2019_2022 <- media_pnt_2019_2022 + sd_pnt_2019_2022
+  linha_inf_1sd_2019_2022 <- media_pnt_2019_2022 - sd_pnt_2019_2022
+
+  media_pnt_2023_2024 <- as.numeric(dist_stats_2023_2024$median)
+  sd_pnt_2023_2024 <- as.numeric(dist_stats_2023_2024$sd)
+  linha_sup_2023_2024 <- media_pnt_2023_2024 + 2 * sd_pnt_2023_2024
+  linha_inf_2023_2024 <- media_pnt_2023_2024 - 2 * sd_pnt_2023_2024
+  linha_sup_1sd_2023_2024 <- media_pnt_2023_2024 + sd_pnt_2023_2024
+  linha_inf_1sd_2023_2024 <- media_pnt_2023_2024 - sd_pnt_2023_2024
+  
+  # Criando o gráfico com a série histórica de pnt_percent
+  grafico <- ggplot(subestacao_escolhida, aes(x = periodo, y = pnt_percent)) +
+    geom_line(color = "#EA7542") +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = media_pnt_2019_2022, yend = media_pnt_2019_2022), color = "#72C8ED", size = 1) +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = linha_sup_2019_2022, yend = linha_sup_2019_2022), color = "#EA7542", linetype = "dashed", size = 1) +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = linha_inf_2019_2022, yend = linha_inf_2019_2022), color = "#EA7542", linetype = "dashed", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = media_pnt_2023_2024, yend = media_pnt_2023_2024), color = "#72C8ED", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = linha_sup_2023_2024, yend = linha_sup_2023_2024), color = "#EA7542", linetype = "dashed", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = linha_inf_2023_2024, yend = linha_inf_2023_2024), color = "#EA7542", linetype = "dashed", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = linha_inf_1sd_2023_2024, yend = linha_inf_1sd_2023_2024), color = "#FFAB4A", linetype = "dotted", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = linha_sup_1sd_2023_2024, yend = linha_sup_1sd_2023_2024), color = "#FFAB4A", linetype = "dotted", size = 1) +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = linha_inf_1sd_2019_2022, yend = linha_inf_1sd_2019_2022), color = "#FFAB4A", linetype = "dotted", size = 1) +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = linha_sup_1sd_2019_2022, yend = linha_sup_1sd_2019_2022), color = "#FFAB4A", linetype = "dotted", size = 1) +
+    labs(title = paste0("Série histórica de PNT (%) - ", subestacao_escolhida$subestacoes[1], " (index: ", subestacao_escolhida$subestacao_index[1], ")"),
+         x = "Período",
+         y = "PNT (%)") +
+    scale_y_continuous(labels = scales::label_percent(decimal.mark = ",", scale = 1)) +  # Alteração para usar vírgula
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y") +  # Mostrar todos os anos no eixo X
+    theme_minimal()
+
+  grafico
+
+```
+
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
+
+
+  # Filtra os dados para a subestação específica
+  subestacao_escolhida <- subestacoes_tratado %>%
+    select(periodo, subestacoes, energia_fornecida_total, perda_nao_tecnica, pnt_percent) %>%
+    mutate(periodo = as.Date(periodo),
+           mes = factor(month(periodo, label = TRUE, abbr = TRUE), 
+                        levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")),
+           ano = factor(year(periodo)),
+           subestacao_index = as.integer(factor(subestacoes, levels = sort(unique(subestacoes))))) %>%
+    filter(subestacao_index == 113) %>%
+    mutate(pnt_percent = pnt_percent * 100)
+  
+  # Separando os períodos
+  subestacao_2019_2022 <- subestacao_escolhida %>% filter(year(periodo) %in% 2019:2022)
+  subestacao_2023_2024 <- subestacao_escolhida %>% filter(year(periodo) %in% 2023:2024)
+  
+  # Calculando estatísticas para cada período
+  dist_stats_2019_2022 <- subestacao_2019_2022 %>%
+    summarise(median = median(pnt_percent, na.rm = TRUE), sd = sd(pnt_percent, na.rm = TRUE))
+  
+  dist_stats_2023_2024 <- subestacao_2023_2024 %>%
+    summarise(median = median(pnt_percent, na.rm = TRUE), sd = sd(pnt_percent, na.rm = TRUE))
+  
+  # Calculando médias e limites para cada período
+  media_pnt_2019_2022 <- as.numeric(dist_stats_2019_2022$median)
+  sd_pnt_2019_2022 <- as.numeric(dist_stats_2019_2022$sd)
+  linha_sup_2019_2022 <- media_pnt_2019_2022 + 2 * sd_pnt_2019_2022
+  linha_inf_2019_2022 <- media_pnt_2019_2022 - 2 * sd_pnt_2019_2022
+  linha_sup_1sd_2019_2022 <- media_pnt_2019_2022 + sd_pnt_2019_2022
+  linha_inf_1sd_2019_2022 <- media_pnt_2019_2022 - sd_pnt_2019_2022
+
+  media_pnt_2023_2024 <- as.numeric(dist_stats_2023_2024$median)
+  sd_pnt_2023_2024 <- as.numeric(dist_stats_2023_2024$sd)
+  linha_sup_2023_2024 <- media_pnt_2023_2024 + 2 * sd_pnt_2023_2024
+  linha_inf_2023_2024 <- media_pnt_2023_2024 - 2 * sd_pnt_2023_2024
+  linha_sup_1sd_2023_2024 <- media_pnt_2023_2024 + sd_pnt_2023_2024
+  linha_inf_1sd_2023_2024 <- media_pnt_2023_2024 - sd_pnt_2023_2024
+  
+  # Criando o gráfico com a série histórica de pnt_percent
+  grafico <- ggplot(subestacao_escolhida, aes(x = periodo, y = pnt_percent)) +
+    geom_line(color = "#005270") +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = media_pnt_2019_2022, yend = media_pnt_2019_2022), color = "#72C8ED", size = 1) +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = linha_sup_2019_2022, yend = linha_sup_2019_2022), color = "#EA7542", linetype = "dashed", size = 1) +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = linha_inf_2019_2022, yend = linha_inf_2019_2022), color = "#EA7542", linetype = "dashed", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = media_pnt_2023_2024, yend = media_pnt_2023_2024), color = "#72C8ED", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = linha_sup_2023_2024, yend = linha_sup_2023_2024), color = "#EA7542", linetype = "dashed", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = linha_inf_2023_2024, yend = linha_inf_2023_2024), color = "#EA7542", linetype = "dashed", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = linha_inf_1sd_2023_2024, yend = linha_inf_1sd_2023_2024), color = "#FFAB4A", linetype = "dotted", size = 1) +
+    geom_segment(aes(x = as.Date("2023-01-01"), xend = as.Date("2024-12-31"), y = linha_sup_1sd_2023_2024, yend = linha_sup_1sd_2023_2024), color = "#FFAB4A", linetype = "dotted", size = 1) +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = linha_inf_1sd_2019_2022, yend = linha_inf_1sd_2019_2022), color = "#FFAB4A", linetype = "dotted", size = 1) +
+    geom_segment(aes(x = as.Date("2019-01-01"), xend = as.Date("2022-12-31"), y = linha_sup_1sd_2019_2022, yend = linha_sup_1sd_2019_2022), color = "#FFAB4A", linetype = "dotted", size = 1) +
+    labs(title = paste0("Série histórica de PNT (%) - ", subestacao_escolhida$subestacoes[1], " (index: ", subestacao_escolhida$subestacao_index[1], ")"),
+         x = "Período",
+         y = "PNT (%)") +
+    scale_y_continuous(labels = scales::label_percent(decimal.mark = ",", scale = 1)) +  # Alteração para usar vírgula
+    scale_x_date(date_breaks = "1 year", date_labels = "%Y") +  # Mostrar todos os anos no eixo X
+    theme_minimal()
+
+  grafico
+
+```
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
+
+
+  # Filtra os dados para a subestação específica
+  subestacao_escolhida <- subestacoes_tratado %>%
+    select(periodo, subestacoes, energia_fornecida_total, perda_nao_tecnica, pnt_percent) %>%
+    mutate(periodo = as.Date(periodo),
+           mes = factor(month(periodo, label = TRUE, abbr = TRUE), 
+                        levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")),
+           ano = factor(year(periodo)),
+           subestacao_index = as.integer(factor(subestacoes, levels = sort(unique(subestacoes))))) %>%
+    filter(subestacao_index == 36) %>%
+    mutate(pnt_percent = pnt_percent * 100)
+  
+  # Calculando as estatísticas
+  dist_stats <- subestacao_escolhida %>%
+    summarise(
+      n = n(),
+      min = min(pnt_percent, na.rm = TRUE),
+      max = max(pnt_percent, na.rm = TRUE),
+      sd = sd(pnt_percent, na.rm = TRUE),
+      q1 = quantile(pnt_percent, 0.25, na.rm = TRUE),
+      median = quantile(pnt_percent, 0.5, na.rm = TRUE),
+      q3 = quantile(pnt_percent, 0.75, na.rm = TRUE),
+      mean = mean(pnt_percent, na.rm = TRUE)
+    )
+  
+  # Criando histograma com ggplot
+  grafico <- ggplot(subestacao_escolhida, aes(x = pnt_percent)) +
+    geom_histogram(binwidth = diff(range(subestacao_escolhida$pnt_percent)) / 30, 
+                   fill = "#005270", color = "black", alpha = 0.7) +  # Ajustando binwidth dinamicamente
+    geom_vline(xintercept = dist_stats$q1, color = "black", linetype = "dashed", size = 1) +
+    geom_vline(xintercept = dist_stats$median, color = "black", linetype = "dashed", size = 1) +
+    geom_vline(xintercept = dist_stats$q3, color = "black", linetype = "dashed", size = 1) +
+    geom_vline(xintercept = dist_stats$mean, color = "#EA7542", linetype = "dashed", size = 1) +
+    annotate("text", x = dist_stats$q1, y = 5, label = "Q1", color = "black", hjust = -0.2) +
+    annotate("text", x = dist_stats$median, y = 5, label = "Q2", color = "black", hjust = -0.2) +
+    annotate("text", x = dist_stats$q3, y = 5, label = "Q3", color = "black", hjust = -0.2) +
+    annotate("text", x = dist_stats$mean, y = 4, label = "Mean", color = "#EA7542", hjust = -0.2) + 
+labs(title = paste0("Histograma de PNT (%) - ", subestacao_escolhida$subestacoes[1], " (index: ", subestacao_escolhida$subestacao_index[1], ")"),
+         subtitle = paste(
+            "n:", dist_stats$n, " | ",
+            "sd:", round(dist_stats$sd, 2), " | ",
+            "Min:", round(dist_stats$min, 2), " | ",
+            "Q1:", round(dist_stats$q1, 2), " | ",
+            "Q2:", round(dist_stats$median, 2), " | ",
+            "Média:", round(dist_stats$mean, 2), " | ",
+            "Q3:", round(dist_stats$q3, 2), " | ",
+            "Max:", round(dist_stats$max, 2)
+          ),
+         x = "PNT (%)",
+         y = "Frequência") +
+    scale_x_continuous(labels = scales::label_percent(decimal.mark = ",", scale = 1)) +  # Alteração para usar vírgula
+    theme_minimal()
+
+  grafico
+
+```
+
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
+
+
+  # Filtra os dados para a subestação específica
+  subestacao_escolhida <- subestacoes_tratado %>%
+    select(periodo, subestacoes, energia_fornecida_total, perda_nao_tecnica, pnt_percent) %>%
+    mutate(periodo = as.Date(periodo),
+           mes = factor(month(periodo, label = TRUE, abbr = TRUE), 
+                        levels = c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")),
+           ano = factor(year(periodo)),
+           subestacao_index = as.integer(factor(subestacoes, levels = sort(unique(subestacoes))))) %>%
+    filter(subestacao_index == 113) %>%
+    mutate(pnt_percent = pnt_percent * 100)
+  
+  # Calculando as estatísticas
+  dist_stats <- subestacao_escolhida %>%
+    summarise(
+      n = n(),
+      min = min(pnt_percent, na.rm = TRUE),
+      max = max(pnt_percent, na.rm = TRUE),
+      sd = sd(pnt_percent, na.rm = TRUE),
+      q1 = quantile(pnt_percent, 0.25, na.rm = TRUE),
+      median = quantile(pnt_percent, 0.5, na.rm = TRUE),
+      q3 = quantile(pnt_percent, 0.75, na.rm = TRUE),
+      mean = mean(pnt_percent, na.rm = TRUE)
+    )
+  
+  # Criando histograma com ggplot
+  grafico <- ggplot(subestacao_escolhida, aes(x = pnt_percent)) +
+    geom_histogram(binwidth = diff(range(subestacao_escolhida$pnt_percent)) / 30, 
+                   fill = "#005270", color = "black", alpha = 0.7) +  # Ajustando binwidth dinamicamente
+    geom_vline(xintercept = dist_stats$q1, color = "black", linetype = "dashed", size = 1) +
+    geom_vline(xintercept = dist_stats$median, color = "black", linetype = "dashed", size = 1) +
+    geom_vline(xintercept = dist_stats$q3, color = "black", linetype = "dashed", size = 1) +
+    geom_vline(xintercept = dist_stats$mean, color = "#EA7542", linetype = "dashed", size = 1) +
+    annotate("text", x = dist_stats$q1, y = 5, label = "Q1", color = "black", hjust = -0.2) +
+    annotate("text", x = dist_stats$median, y = 5, label = "Q2", color = "black", hjust = -0.2) +
+    annotate("text", x = dist_stats$q3, y = 5, label = "Q3", color = "black", hjust = -0.2) +
+    annotate("text", x = dist_stats$mean, y = 4, label = "Mean", color = "#EA7542", hjust = -0.2) + 
+labs(title = paste0("Histograma de PNT (%) - ", subestacao_escolhida$subestacoes[1], " (index: ", subestacao_escolhida$subestacao_index[1], ")"),
+         subtitle = paste(
+            "n:", dist_stats$n, " | ",
+            "sd:", round(dist_stats$sd, 2), " | ",
+            "Min:", round(dist_stats$min, 2), " | ",
+            "Q1:", round(dist_stats$q1, 2), " | ",
+            "Q2:", round(dist_stats$median, 2), " | ",
+            "Média:", round(dist_stats$mean, 2), " | ",
+            "Q3:", round(dist_stats$q3, 2), " | ",
+            "Max:", round(dist_stats$max, 2)
+          ),
+         x = "PNT (%)",
+         y = "Frequência") +
+    scale_x_continuous(labels = scales::label_percent(decimal.mark = ",", scale = 1)) +  # Alteração para usar vírgula
+    theme_minimal()
+
+  grafico
+
+```
+
+
+

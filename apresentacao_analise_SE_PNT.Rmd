@@ -4,7 +4,7 @@ subtitle: "Distribuição de PNT nas subestações"
 # institute: "Leme"
 # author: "Amsatou e Afonso"
 # date: "`r Sys.Date()`"
-date: "07 de abril de 2025"
+date: "10 de abril de 2025"
 encoding: "UTF-8"
 output:
   xaringan::moon_reader:
@@ -267,13 +267,11 @@ h1, h2, h3 {
 ```{r eval=FALSE, include=FALSE, echo=FALSE}
 xaringan::summon_remark() # para conseguir apresentar offline
 
-pagedown::chrome_print("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/apresentacao_analise_SE_PNT.html")
+# pagedown::chrome_print("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/apresentacao_analise_SE_PNT.html")
 
-xaringan::inf_mr("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/apresentacao_analise_SE_PNT.html")
+# xaringan::inf_mr("C:/Users/amsa2/OneDrive - LEME LABORATORIO PARA REDUCAO DA VIOLENC/Scripts/PNT/apresentacao_analise_SE_PNT.html")
 
 
-
-usethis::use_git()
 
 ```
 
@@ -683,28 +681,28 @@ hchart(pnt_aneel_br_rj, type = "line", hcaes(x = ano, y = pnt_real_sobre_energia
   ) %>%
   
   # Tooltip com formatação
-  hc_tooltip(formatter = JS("function() { return '<b>' + this.series.name + '</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }")) %>%
+  hc_tooltip(formatter = JS("function() { return '<b>' + this.series.name + '</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %'; }"))
   # hc_add_series(name = "PNT (%)",
   #               data = round(pnt_subestacoes_ano$pnt_percent * 100, 2),
   #               type = "line", yAxis = 1,
   #               color = "#EA7542") %>%
-  hc_add_series(
-  data = list(list(x = 2023, y = 31.07, name = "% Auferido pela Light")),
-  type = "scatter",
-  marker = list(symbol = "circle", radius = 4, fillColor = "#000000"),
-  dataLabels = list(
-    enabled = TRUE,
-    format = "% Auferido pela Light",
-    align = "left",
-    verticalAlign = "middle",
-    style = list(
-      fontFamily = "Montserrat",
-      fontSize = "10px"
-    )
-  ),
-  enableMouseTracking = FALSE,
-  showInLegend = FALSE
-)
+#   hc_add_series(
+#   data = list(list(x = 2023, y = 31.07, name = "% Auferido pela Light")),
+#   type = "scatter",
+#   marker = list(symbol = "circle", radius = 4, fillColor = "#000000"),
+#   dataLabels = list(
+#     enabled = TRUE,
+#     format = "% Auferido pela Light",
+#     align = "left",
+#     verticalAlign = "middle",
+#     style = list(
+#       fontFamily = "Montserrat",
+#       fontSize = "10px"
+#     )
+#   ),
+#   enableMouseTracking = FALSE,
+#   showInLegend = FALSE
+# )
   
 #   hc_annotations(
 #   list(
@@ -846,7 +844,7 @@ pnt_subestacoes_contribuicao <- pnt_subestacoes_contribuicao %>%
 
 # 2. Cores por faixa
 cores_faixa <- c(
-  "Abaixo da média nacional" = "#72C8ED",
+  "Abaixo da média nacional" = "grey",
   "Entre média nacional e p75" = "#FFCB8F",
   "Entre p75 e p90" = "#FFAB4A",
   "Entre p90 e p95" = "#EA7542",
@@ -855,18 +853,21 @@ cores_faixa <- c(
 
 
 # Ajuste linear (reta de regressão)
-modelo <- lm(pnt_percent ~ percent_absoluto, data = pnt_subestacoes_contribuicao)
+modelo <- lm(pnt_percent ~ perda_nao_tecnica, data = pnt_subestacoes_contribuicao)
 
 # Coeficientes da reta
 a <- coef(modelo)[1]
 b <- coef(modelo)[2]
 
 
+eq_label <- sprintf("y = %.2f + %.2f·x", a, b)
+
+
 # Gerar pontos da reta usando o modelo
 reta_r2  <- data.frame(
-  percent_absoluto = seq(min(pnt_subestacoes_contribuicao$percent_absoluto), max(pnt_subestacoes_contribuicao$percent_absoluto), length.out = 100)
+  perda_nao_tecnica = seq(min(pnt_subestacoes_contribuicao$perda_nao_tecnica), max(pnt_subestacoes_contribuicao$perda_nao_tecnica), length.out = 100)
 ) %>%
-  mutate(pnt_percent = a + b * percent_absoluto)
+  mutate(pnt_percent = a + b * perda_nao_tecnica)
 
 
 
@@ -874,25 +875,26 @@ reta_r2  <- data.frame(
 hchart(
   pnt_subestacoes_contribuicao,
   "scatter",
-  hcaes(y = pnt_percent, x = percent_absoluto, name = subestacao_index, group = faixa)
+  hcaes(y = pnt_percent, x = perda_nao_tecnica, name = subestacao_index, name2 = subestacoes, group = faixa)
 ) %>%
   # hc_colors(c("#72C8ED", "#FFAB4A", "#EA7542", "#005290")) %>%
-  hc_colors(c("#72C8ED", "#FFCB8F", "#FFAB4A", "#EA7542", "#A20021")) %>%
+  hc_colors(c("grey", "#FFCB8F", "#FFAB4A", "#EA7542", "#A20021")) %>%
   hc_chart(backgroundColor = "transparent") %>%
   hc_yAxis(
     title = list(text = "PNT (%) na subestação", style = list(fontFamily = "Montserrat")),
     labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.') + ' %'; }"))
   ) %>%
   hc_xAxis(
-    min = -0.5,
-    max = 4,
-    title = list(text = "Contribuição % de cada subestação no PNT total", style = list(fontFamily = "Montserrat")),
-    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.') + ' %'; }"))
+    # min = -0.5,
+    # max = 4,
+    title = list(text = "Perda não técnica (kWh)", style = list(fontFamily = "Montserrat")),
+    labels = list(formatter = JS("function() { return Highcharts.numberFormat(this.value, 0, ',', '.'); }"))
   ) %>%
   hc_tooltip(formatter = JS("
     function() {
-      return '<b>PNT (%) na subestação</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %' + '<br>' +
-             '<b>Contribuição % de cada subestação no PNT totalo</b>: ' + Highcharts.numberFormat(this.x, 2, ',', '.') + ' %';
+      return '<b>' + this.point.name2 + '</b><br>' +
+             '<b>PNT (%) na subestação</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %' + '<br>' +
+             '<b>Perda não técnica (kWh)</b>: ' + Highcharts.numberFormat(this.x, 0, ',', '.') ;
     }
   ")) %>%
    # Linhas verticais com legenda
@@ -929,8 +931,8 @@ hchart(
   #             marker = list(enabled = FALSE), showInLegend = TRUE) %>%
 # 
   hc_add_series(data = reta_r2, type = "line",
-                hcaes(x = percent_absoluto, y = pnt_percent),
-                name = "Reta r2", color = "#000000", dashStyle = "ShortDash",
+                hcaes(x = perda_nao_tecnica, y = pnt_percent),
+                name = "Regressão linear", color = "#000000", dashStyle = "ShortDash",
                 marker = list(enabled = FALSE),
                 enableMouseTracking = FALSE,
                 showInLegend = TRUE) %>%
@@ -945,7 +947,18 @@ hchart(
       marker = list(radius = 6)
     )
   ) %>%
-  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat"))
+  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+  hc_annotations(list(
+  labels = list(
+    list(
+      point = list(xAxis = 0, yAxis = 0, x = 270000, y = max(pnt_subestacoes_contribuicao$pnt_percent)+15),
+      text = eq_label,
+      backgroundColor = "rgba(255,255,255,0.7)",
+      borderColor = "gray",
+      style = list(fontSize = "12px", fontFamily = "Montserrat")
+    )
+  )
+))
 
 
 
@@ -969,7 +982,7 @@ subestacoes_mapa <- pnt_subestacoes_contribuicao %>%
 
 pal <- colorFactor(
   palette = c(
-  "Abaixo da média nacional" = "#72C8ED",
+  "Abaixo da média nacional" = "grey",
   "Entre média nacional e p75" = "#FFCB8F",
   "Entre p75 e p90" = "#FFAB4A",
   "Entre p90 e p95" = "#EA7542",
@@ -1019,7 +1032,7 @@ leaflet(subestacoes_mapa) %>%
 
 ### Subestações em Áreas com Severas Restrições Operacionais
 #### Esse fenômeno não está necessariamente vinculado à presença de ASRO
-###### Fonte: LIGHT - Balanço Histórico SETD 2024
+###### Fonte: LIGHT - Balanço Histórico SETD (2024)
 
 .panelset[
 
@@ -1057,16 +1070,21 @@ pnt_subestacoes_contribuicao <- pnt_subestacoes_contribuicao %>%
 
 # Paleta de cores para os quadrantes
 # cores_faixa <- c(
-#   "Quadrante 1 (Baixo ASRO / Baixo PNT)" = "#B3E2CD",
-#   "Quadrante 2 (Alto ASRO / Baixo PNT)"  = "#FDCDAC",
-#   "Quadrante 3 (Baixo ASRO / Alto PNT)"  = "#CBD5E8",
-#   "Quadrante 4 (Alto ASRO / Alto PNT)"   = "#F4CAE4"
+#   "Quadrante 1 (Baixo ASRO / Baixo PNT)" = "#f0d9e0",
+#   "Quadrante 2 (Alto ASRO / Baixo PNT)"  = "#d699ad",
+#   "Quadrante 3 (Baixo ASRO / Alto PNT)"  = "#b84c70",
+#   "Quadrante 4 (Alto ASRO / Alto PNT)"   = "#7a0029"
 # )
+
 
 # Ajuste da reta r2 (regressão linear)
 modelo <- lm(pnt_percent ~ perc_asro, data = pnt_subestacoes_contribuicao)
 a <- coef(modelo)[1]
 b <- coef(modelo)[2]
+
+
+eq_label <- sprintf("y = %.2f + %.2f·x", a, b)
+
 
 reta_r2 <- data.frame(
   perc_asro = seq(min(pnt_subestacoes_contribuicao$perc_asro), max(pnt_subestacoes_contribuicao$perc_asro), length.out = 100)
@@ -1077,9 +1095,9 @@ reta_r2 <- data.frame(
 hchart(
   pnt_subestacoes_contribuicao,
   "scatter",
-  hcaes(y = pnt_percent, x = perc_asro, name = subestacao_index, group = faixa)
+  hcaes(y = pnt_percent, x = perc_asro, name = subestacao_index, name2 = subestacoes, group = faixa)
 ) %>%
-  hc_colors(c("#FFCB8F", "#e47f2c", "#c63e0d", "#A20021")) %>%
+  hc_colors(c("#f0d9e0", "#d699ad", "#b84c70", "#7a0029")) %>%
   hc_chart(backgroundColor = "transparent") %>%
   hc_yAxis(
     title = list(text = "PNT (%) na subestação", style = list(fontFamily = "Montserrat")),
@@ -1091,7 +1109,7 @@ hchart(
   hc_xAxis(
     min = 0,
     max = 80,
-    title = list(text = "Percentual de ASRO", style = list(fontFamily = "Montserrat")),
+    title = list(text = "Percentual de área coberta por ASRO", style = list(fontFamily = "Montserrat")),
     plotLines = list(
       list(color = "darkgrey", value = 20, width = 1, zIndex = 5)
     ),
@@ -1099,16 +1117,17 @@ hchart(
   ) %>%
   hc_add_series(data = reta_r2, type = "line",
                 hcaes(x = perc_asro, y = pnt_percent),
-                name = "Reta r2", color = "darkgrey", dashStyle = "ShortDash",
+                name = "Regressão linear", color = "darkgrey", dashStyle = "ShortDash",
                 marker = list(enabled = FALSE),
                 enableMouseTracking = FALSE,
                 showInLegend = TRUE) %>%
   hc_tooltip(formatter = JS("
-    function() {
-      return '<b>PNT (%) na subestação</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %' + '<br>' +
-             '<b>ASRO (%)</b>: ' + Highcharts.numberFormat(this.x, 2, ',', '.') + ' %';
-    }
-  ")) %>%
+  function() {
+    return '<b>' + this.point.name2 + '</b><br>' +
+           '<b>PNT (%) na subestação</b>: ' + Highcharts.numberFormat(this.y, 2, ',', '.') + ' %' + '<br>' +
+           '<b>% coberto por ASRO</b>: ' + Highcharts.numberFormat(this.x, 2, ',', '.') + ' %';
+  }
+")) %>%
   hc_plotOptions(
     scatter = list(
       dataLabels = list(
@@ -1119,7 +1138,18 @@ hchart(
       marker = list(radius = 6)
     )
   ) %>%
-  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat"))
+  hc_legend(enabled = TRUE, itemStyle = list(fontFamily = "Montserrat")) %>%
+  hc_annotations(list(
+  labels = list(
+    list(
+      point = list(xAxis = 0, yAxis = 0, x = 70, y = max(pnt_subestacoes_contribuicao$pnt_percent)+15),
+      text = eq_label,
+      backgroundColor = "rgba(255,255,255,0.7)",
+      borderColor = "gray",
+      style = list(fontSize = "12px", fontFamily = "Montserrat")
+    )
+  )
+))
 
 
 
@@ -1151,13 +1181,23 @@ subestacoes_mapa <- pnt_subestacoes_contribuicao %>%
 # )
 
 
+# cores_faixa <- c(
+#   "Abaixo da média nacional"      = "#D0E6F2",  # Azul bem claro
+#   "Entre média nacional e p75"    = "#A0C4DE",  # Azul claro
+#   "Entre p75 e p90"               = "#5A9BCF",  # Azul médio
+#   "Entre p90 e p95"               = "#1F77B4",  # Azul escuro
+#   "Acima de p95"                  = "#08306B"   # Azul muito escuro
+# )
+
+
+
 cores_faixa <- c(
-  "Abaixo da média nacional"      = "#D0E6F2",  # Azul bem claro
-  "Entre média nacional e p75"    = "#A0C4DE",  # Azul claro
-  "Entre p75 e p90"               = "#5A9BCF",  # Azul médio
-  "Entre p90 e p95"               = "#1F77B4",  # Azul escuro
-  "Acima de p95"                  = "#08306B"   # Azul muito escuro
+  "Quadrante 1 (Baixo ASRO / Baixo PNT)" = "#f0d9e0",
+  "Quadrante 2 (Alto ASRO / Baixo PNT)"  = "#d699ad",
+  "Quadrante 3 (Baixo ASRO / Alto PNT)"  = "#b84c70",
+  "Quadrante 4 (Alto ASRO / Alto PNT)"   = "#7a0029"
 )
+
 
 
 pal <- colorFactor(
@@ -1334,13 +1374,13 @@ highchart() %>%
 
 ### Quais subestações sustentaram esse aumento? 
 #### 84 das 94 subestações registraram aumento do percentual de PNT de 2022 para 2023
-###### Fonte: LIGHT - Balanço Histórico SETD
+###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
 ```{r, echo=FALSE, message=FALSE, warning=FALSE}
 # Tabela com Reactable
 
 pnt_subestacoes_contribuicao_base %>%
-  select(subestacao_index, subestacoes, pnt_percent2024, pnt_percent2023, contribuicao_variacao_pnt_2223) %>%
-  
+  mutate(variacao_percentual = pnt_percent2023 - pnt_percent2022) %>%
+  select(subestacoes, pnt_percent2022, pnt_percent2023, variacao_percentual, contribuicao_variacao_pnt_2223) %>%
   arrange(desc(contribuicao_variacao_pnt_2223)) %>%
   
   reactable(
@@ -1350,11 +1390,12 @@ pnt_subestacoes_contribuicao_base %>%
         color = "white"
       )),
     columns = list(
-      subestacao_index = colDef(name = "Índice"),
+      # subestacao_index = colDef(name = "Índice"),
       subestacoes = colDef(name = "Subestações"),
+      pnt_percent2022 = colDef(name = "%PNT 2022", format = colFormat(digits = 2, percent = T)),
       pnt_percent2023 = colDef(name = "%PNT 2023", format = colFormat(digits = 2, percent = T)),
-      pnt_percent2024 = colDef(name = "%PNT 2024", format = colFormat(digits = 2, percent = T)),
-      contribuicao_variacao_pnt_2223 = colDef(name = "Variação PNT", format = colFormat(digits = 2, percent = T))
+      variacao_percentual = colDef(name = "Variação percentual", format = colFormat(digits = 2, percent = T)),
+      contribuicao_variacao_pnt_2223 = colDef(name = "Contribuição relativa", format = colFormat(digits = 2, percent = T))
     ),
     bordered = TRUE,
     striped = TRUE,
@@ -1367,7 +1408,7 @@ pnt_subestacoes_contribuicao_base %>%
       stripedColor = "#F8F8F8",
       highlightColor = "#EAEAEA",
       cellPadding = "8px 12px",
-      style = list(fontSize = "12px", fontFamily = "Montserrat, Arial, sans-serif"),
+      style = list(fontSize = "13px", fontFamily = "Montserrat, Arial, sans-serif"),
   
       searchInputStyle = list(width = "100%")
     )
@@ -1384,22 +1425,22 @@ pnt_subestacoes_contribuicao_base %>%
 ### Principais achados
 
 
-- <h5 style="color: black;"><strong>Elevação na PNT a partir de 2023</strong> <br> 
-<span style="font-weight: normal;">O percentual de PNT na área de concessão da Light (RJ) se manteve estável entre 2019 e 2022 (~25%), apresentando uma elevação significativa alcançando 31% em 2023 e 2024.</span></h5>
-
 - <h5 style="color: black;"><strong>Destaque para o Estado do Rio de Janeiro</strong> <br> 
 <span style="font-weight: normal;">O RJ ocupa a 3ª posição entre os estados com maior percentual de PNT, consistentemente acima da média nacional ao longo de todo o período analisado.</span></h5>
 
-- <h5 style="color: black;"><strong>Alta variabilidade</strong> <br>
-<span style="font-weight: normal;">O desvio padrão do %PNT é considerável (6%).</span></h5>
+- <h5 style="color: black;"><strong>Alto percentual de PNT é generalizado na área de concessão</strong> <br>
+<span style="font-weight: normal;">Quase todas as subestações da Light possuem percentual de PNT superior à média brasileira (5%).</span></h5>
 
-- <h5 style="color: black;"><strong>Padrão sazonal</strong> <br>
-<span style="font-weight: normal;">Observa-se uma sazonalidade clara, com maiores percentuais de PNT nos meses de verão e menores no inverno.</span></h5>
+- <h5 style="color: black;"><strong>Alto percentual de PNT em áreas com baixa presença de ASRO</strong> <br>
+<span style="font-weight: normal;">A presença de ASRO, por si só, não é suficiente para explicar os altos percentuais de PNT nas subestações.</span></h5>
+
+- <h5 style="color: black;"><strong>Elevação nos percentuais de PNT a partir de 2023</strong> <br> 
+<span style="font-weight: normal;">O percentual de PNT na área de concessão da Light (RJ) se manteve estável entre 2019 e 2022 (~25%), apresentando uma elevação significativa alcançando 31% em 2023 e 2024.</span></h5>
 
 - <h5 style="color: black;"><strong>Referência para valor de %PNT elevado (RJ)</strong> <br>
 <span style="font-weight: normal;">No contexto da área de concessão da Light (RJ), podemos considerar um percentual de PNT elevado quando superar 42% (calculado como média + 2 desvios padrão).</span></h5>
 
-- <h5 style="color: black;"><strong>Subestações com alto %PNT</strong> <br>
+- <h5 style="color: black;"><strong>Subestações com alto percentual de PNT</strong> <br>
 <span style="font-weight: normal;">Em 2024, 24 das 94 subestações do RJ encerraram o ano com %PNT acima de 42%.</span></h5>
 
 
@@ -1423,22 +1464,10 @@ background-position: center
 
 
 
-
-
----
-
-
-
-
-
-
----
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.height=6.5, out.width='100%'}
 
 ### Extra: Fatores de sazonalidade na área de concessão da LIGHT por mês
 ###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
-
-```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6.5, out.width='100%'}
-
 
 
 # Início do ajuste da série temporal
@@ -1499,15 +1528,16 @@ highchart() %>%
 ```
 
 
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.height=6.5, out.width='100%'}
+
+
 ---
 
 ### Extra: Série histórica de PNT (%) na área de concessão da LIGHT por mês/ano
 ###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
 
 
-```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.height=6.5, out.width='100%'}
-
-
+  
 pnt_subestacoes_periodo <-
   subestacoes_tratado %>%
   group_by(periodo) %>%
@@ -1672,16 +1702,16 @@ hchart(pnt_subestacoes_periodo, type = "line", hcaes(x = periodo, y = pnt_percen
 ```
 
 
----
 
-### Extra: Série histórica de PNT (%) em subestações na área de concessão da LIGHT
-###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
 
-.panelset[
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
 
-.panel[.panel-name[SETD 36]
-```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
-
+# # Extra: Série histórica de PNT (%) em subestações na área de concessão da LIGHT
+# ###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
+# 
+# .panelset[
+# 
+# .panel[.panel-name[SETD 36]
 
   # Filtra os dados para a subestação específica
   subestacao_escolhida <- subestacoes_tratado %>%
@@ -1743,10 +1773,9 @@ hchart(pnt_subestacoes_periodo, type = "line", hcaes(x = periodo, y = pnt_percen
   grafico
 
 ```
-]
 
-.panel[.panel-name[SETD 113]
-```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
 
 
   # Filtra os dados para a subestação específica
@@ -1809,19 +1838,8 @@ hchart(pnt_subestacoes_periodo, type = "line", hcaes(x = periodo, y = pnt_percen
   grafico
 
 ```
-]
 
-]
-
----
-
-### Extra: Distribuição de PNT (%) em subestações na área de concessão da LIGHT 
-###### Fonte: LIGHT - Balanço Histórico SETD jan/19 - dez/24
-
-.panelset[
-
-.panel[.panel-name[SETD 36]
-```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
 
 
   # Filtra os dados para a subestação específica
@@ -1879,10 +1897,9 @@ labs(title = paste0("Histograma de PNT (%) - ", subestacao_escolhida$subestacoes
   grafico
 
 ```
-]
 
-.panel[.panel-name[SETD 113]
-```{r, echo=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
+
+```{r, eval=FALSE, message=FALSE, warning=FALSE, fig.width=10, fig.height=3.5, dpi=300}
 
 
   # Filtra os dados para a subestação específica
@@ -1940,8 +1957,6 @@ labs(title = paste0("Histograma de PNT (%) - ", subestacao_escolhida$subestacoes
   grafico
 
 ```
-]
 
-]
 
 
